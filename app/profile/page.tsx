@@ -13,7 +13,8 @@ export default function ProfilePage() {
     location: '',
     gender: '',
     interests: [] as string[],
-    avatar_url: ''
+    avatar_url: '',
+    show_attended: false
   })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -31,7 +32,8 @@ export default function ProfilePage() {
         location: p.location || '',
         gender: p.gender || '',
         interests: p.interests || [],
-        avatar_url: p.avatar_url || ''
+        avatar_url: p.avatar_url || '',
+        show_attended: p.show_attended || false
       })
     })
   }, [])
@@ -79,7 +81,6 @@ export default function ProfilePage() {
   return (
     <main style={{padding:'24px 20px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
 
-      {/* HEADER */}
       <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'24px'}}>
         {!isNew && <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'20px'}}>←</a>}
         <div>
@@ -110,7 +111,7 @@ export default function ProfilePage() {
         <div style={{display:'flex', flexDirection:'column', alignItems:'center', marginBottom:'28px'}}>
           <div style={{width:'100px', height:'100px', borderRadius:'50%', background:'var(--green-mid)', overflow:'hidden', marginBottom:'14px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', fontWeight:'700', color:'var(--green-dark)', border:'3px solid var(--green-light)'}}>
             {profile.avatar_url
-              ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+              ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="avatar" />
               : (profile.display_name?.[0] || '?')}
           </div>
           <div style={{display:'flex', gap:'8px'}}>
@@ -143,7 +144,7 @@ export default function ProfilePage() {
               <div
                 key={opt.value}
                 onMouseDown={() => setProfile(p => ({...p, gender: opt.value}))}
-                style={{padding:'14px', border:`2px solid ${profile.gender === opt.value ? 'var(--green)' : 'var(--border)'}`, background: profile.gender === opt.value ? 'var(--green-light)' : 'white', borderRadius:'var(--radius-sm)', cursor:'pointer', textAlign:'center', transition:'all 0.15s'}}
+                style={{padding:'14px', border:`2px solid ${profile.gender === opt.value ? 'var(--green)' : 'var(--border)'}`, background: profile.gender === opt.value ? 'var(--green-light)' : 'white', borderRadius:'var(--radius-sm)', cursor:'pointer', textAlign:'center'}}
               >
                 <div style={{fontSize:'22px', marginBottom:'4px'}}>{opt.icon}</div>
                 <div style={{fontSize:'13px', fontWeight:'600', color: profile.gender === opt.value ? 'var(--green-dark)' : 'var(--text-2)'}}>{opt.label}</div>
@@ -175,7 +176,7 @@ export default function ProfilePage() {
         </div>
 
         {/* INTERESTS */}
-        <div style={{marginBottom:'24px'}}>
+        <div style={{marginBottom:'20px'}}>
           <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'10px', color:'var(--text-2)'}}>Interests</p>
           <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
             {INTERESTS.map(interest => (
@@ -186,13 +187,26 @@ export default function ProfilePage() {
                   padding:'7px 14px', borderRadius:'100px', fontSize:'13px', fontWeight:'500', cursor:'pointer',
                   border:`1.5px solid ${profile.interests.includes(interest) ? 'var(--green)' : 'var(--border)'}`,
                   background: profile.interests.includes(interest) ? 'var(--green-light)' : 'white',
-                  color: profile.interests.includes(interest) ? 'var(--green-dark)' : 'var(--text-2)',
-                  transition:'all 0.15s'
+                  color: profile.interests.includes(interest) ? 'var(--green-dark)' : 'var(--text-2)'
                 }}
               >
                 {interest}
               </span>
             ))}
+          </div>
+        </div>
+
+        {/* SHOW ATTENDED */}
+        <div style={{marginBottom:'24px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--bg)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)'}}>
+          <div>
+            <div style={{fontSize:'14px', fontWeight:'600', marginBottom:'2px'}}>Show activities attended</div>
+            <div style={{fontSize:'12px', color:'var(--text-3)'}}>Others can see events you have joined</div>
+          </div>
+          <div
+            onMouseDown={() => setProfile(p => ({...p, show_attended: !p.show_attended}))}
+            style={{width:'44px', height:'24px', borderRadius:'100px', background: profile.show_attended ? 'var(--green)' : '#ddd', cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0}}
+          >
+            <div style={{width:'20px', height:'20px', borderRadius:'50%', background:'white', position:'absolute', top:'2px', left: profile.show_attended ? '22px' : '2px', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}} />
           </div>
         </div>
 

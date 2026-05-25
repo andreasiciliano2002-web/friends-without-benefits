@@ -14,9 +14,10 @@ const CATEGORY_CONFIG: Record<string, { icon: string; bg: string; color: string 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const [profile, setProfile] = useState<any>(null)
   const [events, setEvents] = useState<any[]>([])
+  const [attended, setAttended] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [tab, setTab] = useState<'events' | 'groups'>('events')
+  const [tab, setTab] = useState<'events' | 'attended' | 'groups'>('events')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -46,6 +47,12 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       .select('group_id, groups(id, name, category, description)')
       .eq('user_id', params.id)
     if (groupMembers) setGroups(groupMembers.map((m: any) => m.groups).filter(Boolean))
+
+    const { data: attendedData } = await supabase
+      .from('event_attendees')
+      .select('event_id, events(id, title, category, date, location)')
+      .eq('user_id', params.id)
+    if (attendedData) setAttended(attendedData.map((a: any) => a.events).filter(Boolean))
   }
 
   const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
@@ -58,6 +65,13 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   )
 
   const isMe = currentUser?.id === params.id
+  const showAttended = profile.show_attended || isMe
+
+  const tabs = [
+    { key: 'events', label: `Activities Created (${events.length})` },
+    ...(showAttended ? [{ key: 'attended', label: `Activities Attended (${attended.length})` }] : []),
+    { key: 'groups', label: `Groups Joined (${groups.length})` },
+  ]
 
   return (
     <main style={{padding:'24px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
@@ -70,7 +84,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       <div style={{background:'white', borderRadius:'var(--radius)', padding:'28px', boxShadow:'var(--shadow)', border:'1px solid var(--border)', marginBottom:'16px', textAlign:'center'}}>
         <div style={{width:'88px', height:'88px', borderRadius:'50%', background:bg, overflow:'hidden', margin:'0 auto 16px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'28px', fontWeight:'700', color:'#333'}}>
           {profile.avatar_url
-            ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+            ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="avatar" />
             : (profile.display_name?.[0]?.toUpperCase() || '?')}
         </div>
 
@@ -96,106 +110,107 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       </div>
 
       {/* TABS */}
-      <div style={{display:'flex', gap:'4px', background:'white', borderRadius:'var(--radius-sm)', padding:'4px', marginBottom:'16px', width:'fit-content', border:'1px solid var(--border)'}}>
-        <button
-          onMouseDown={() => setTab('events')}
-          style={{padding:'7px 18px', borderRadius:'8px', border:'none', background: tab === 'events' ? 'var(--green)' : 'transparent', color: tab === 'events' ? 'white' : 'var(--text-3)', fontWeight: tab === 'events' ? '600' : '400', fontSize:'13px', cursor:'pointer'}}
-        >
-          Activities Created ({events.length})
-        </button>
-        <button
-          onMouseDown={() => setTab('groups')}
-          style={{padding:'7px 18px', borderRadius:'8px', border:'none', background: tab === 'groups' ? 'var(--green)' : 'transparent', color: tab === 'groups' ? 'white' : 'var(--text-3)', fontWeight: tab === 'groups' ? '600' : '400', fontSize:'13px', cursor:'pointer'}}
-        >
-          Groups Joined ({groups.length})
-        </button>
+      <div style={{display:'flex', gap:'4px', background:'white', borderRadius:'var(--radius-sm)', padding:'4px', marginBottom:'16px', border:'1px solid var(--border)', overflowX:'auto'}}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onMouseDown={() => setTab(t.key as any)}
+            style={{padding:'7px 14px', borderRadius:'8px', border:'none', background: tab === t.key ? 'var(--green)' : 'transparent', color: tab === t.key ? 'white' : 'var(--text-3)', fontWeight: tab === t.key ? '600' : '400', fontSize:'12px', cursor:'pointer', whiteSpace:'nowrap'}}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* EVENTS TAB */}
-      {tab === 'events' && (
-        <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)'}}>
-          <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>
-            Activities Created ({events.length})
-          </h2>
+      {/* CONTENT */}
+      <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)'}}>
 
-          {events.length === 0 ? (
-            <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
-              <div style={{fontSize:'32px', marginBottom:'8px'}}>🗺️</div>
-              <p style={{fontSize:'14px'}}>{isMe ? 'You have not created any activities yet' : 'No activities created yet'}</p>
-              {isMe && (
-                <a href="/create" style={{display:'inline-block', marginTop:'12px', padding:'10px 20px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'600'}}>
-                  Create your first activity →
-                </a>
-              )}
-            </div>
-          ) : (
-            <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-              {events.map(event => {
-                const cfg = CATEGORY_CONFIG[event.category] || { icon:'🌍', bg:'#E1F5EE', color:'#1D9E75' }
-                return (
-                  <div
-                    key={event.id}
-                    onMouseDown={() => window.location.href = `/events/${event.id}`}
-                    style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}
-                  >
-                    <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>
-                      {cfg.icon}
+        {tab === 'events' && (
+          <>
+            <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Activities Created ({events.length})</h2>
+            {events.length === 0 ? (
+              <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
+                <div style={{fontSize:'32px', marginBottom:'8px'}}>🗺️</div>
+                <p style={{fontSize:'14px'}}>{isMe ? 'You have not created any activities yet' : 'No activities created yet'}</p>
+                {isMe && <a href="/create" style={{display:'inline-block', marginTop:'12px', padding:'10px 20px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'600'}}>Create your first activity →</a>}
+              </div>
+            ) : (
+              <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                {events.map(event => {
+                  const cfg = CATEGORY_CONFIG[event.category] || { icon:'🌍', bg:'#E1F5EE', color:'#1D9E75' }
+                  return (
+                    <div key={event.id} onMouseDown={() => window.location.href = `/events/${event.id}`} style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}>
+                      <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>{cfg.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'14px', fontWeight:'600'}}>{event.title}</div>
+                        <div style={{fontSize:'12px', color:'var(--text-3)'}}>📅 {event.date} · 📍 {event.location}</div>
+                      </div>
+                      <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
                     </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:'14px', fontWeight:'600'}}>{event.title}</div>
-                      <div style={{fontSize:'12px', color:'var(--text-3)'}}>📅 {event.date} · 📍 {event.location}</div>
-                    </div>
-                    <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
 
-      {/* GROUPS TAB */}
-      {tab === 'groups' && (
-        <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)'}}>
-          <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>
-            Groups Joined ({groups.length})
-          </h2>
+        {tab === 'attended' && showAttended && (
+          <>
+            <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Activities Attended ({attended.length})</h2>
+            {attended.length === 0 ? (
+              <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
+                <div style={{fontSize:'32px', marginBottom:'8px'}}>🎯</div>
+                <p style={{fontSize:'14px'}}>No activities attended yet</p>
+              </div>
+            ) : (
+              <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                {attended.map(event => {
+                  const cfg = CATEGORY_CONFIG[event.category] || { icon:'🌍', bg:'#E1F5EE', color:'#1D9E75' }
+                  return (
+                    <div key={event.id} onMouseDown={() => window.location.href = `/events/${event.id}`} style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}>
+                      <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>{cfg.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'14px', fontWeight:'600'}}>{event.title}</div>
+                        <div style={{fontSize:'12px', color:'var(--text-3)'}}>📅 {event.date} · 📍 {event.location}</div>
+                      </div>
+                      <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
 
-          {groups.length === 0 ? (
-            <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
-              <div style={{fontSize:'32px', marginBottom:'8px'}}>👥</div>
-              <p style={{fontSize:'14px'}}>{isMe ? 'You have not joined any groups yet' : 'Not in any groups yet'}</p>
-              {isMe && (
-                <a href="/groups" style={{display:'inline-block', marginTop:'12px', padding:'10px 20px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'600'}}>
-                  Discover groups →
-                </a>
-              )}
-            </div>
-          ) : (
-            <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-              {groups.map(group => {
-                const cfg = CATEGORY_CONFIG[group.category] || { icon:'👥', bg:'#E1F5EE', color:'#1D9E75' }
-                return (
-                  <div
-                    key={group.id}
-                    onMouseDown={() => window.location.href = `/groups/${group.id}`}
-                    style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}
-                  >
-                    <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>
-                      {cfg.icon}
+        {tab === 'groups' && (
+          <>
+            <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Groups Joined ({groups.length})</h2>
+            {groups.length === 0 ? (
+              <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
+                <div style={{fontSize:'32px', marginBottom:'8px'}}>👥</div>
+                <p style={{fontSize:'14px'}}>{isMe ? 'You have not joined any groups yet' : 'Not in any groups yet'}</p>
+                {isMe && <a href="/groups" style={{display:'inline-block', marginTop:'12px', padding:'10px 20px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'600'}}>Discover groups →</a>}
+              </div>
+            ) : (
+              <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                {groups.map(group => {
+                  const cfg = CATEGORY_CONFIG[group.category] || { icon:'👥', bg:'#E1F5EE', color:'#1D9E75' }
+                  return (
+                    <div key={group.id} onMouseDown={() => window.location.href = `/groups/${group.id}`} style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}>
+                      <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>{cfg.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'14px', fontWeight:'600'}}>{group.name}</div>
+                        <div style={{fontSize:'12px', fontWeight:'600', color: cfg.color, textTransform:'uppercase', letterSpacing:'0.04em'}}>{group.category}</div>
+                      </div>
+                      <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
                     </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:'14px', fontWeight:'600'}}>{group.name}</div>
-                      <div style={{fontSize:'12px', fontWeight:'600', color: cfg.color, textTransform:'uppercase', letterSpacing:'0.04em'}}>{group.category}</div>
-                    </div>
-                    <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </main>
   )
 }
