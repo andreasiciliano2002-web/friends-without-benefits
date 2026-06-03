@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 export default function ExplorePage() {
   const [events, setEvents] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
+  const [userGender, setUserGender] = useState<string | null>(null)
   const [attendees, setAttendees] = useState<Record<string, string[]>>({})
   const [loadingJoin, setLoadingJoin] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
@@ -13,20 +14,49 @@ export default function ExplorePage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) window.location.href = '/login'
-      else { setUser(data.user); loadEvents() }
+      else {
+        setUser(data.user)
+        loadUserAndEvents(data.user.id)
+      }
     })
   }, [])
 
-  const loadEvents = async () => {
+  const loadUserAndEvents = async (userId: string) => {
+    // Carica il genere dell'utente
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('gender')
+      .eq('id', userId)
+      .single()
+
+    const gender = profile?.gender || null
+    setUserGender(gender)
+
+    loadEvents(gender)
+  }
+
+  const loadEvents = async (gender: string | null) => {
     const today = new Date().toISOString().split('T')[0]
     const { data: eventsData } = await supabase
       .from('events')
-      .select('*')
+      .select('*, profiles!events_creator_id_fkey(display_name)')
       .gte('date', today)
       .order('date', { ascending: true })
 
     if (eventsData) {
-      setEvents(eventsData)
+      // Filtra eventi in base al genere:
+      // - man non vede women only
+      // - woman non vede men only
+      // - other (o non specificato) vede tutto
+      const filtered = eventsData.filter(event => {
+        if (!event.gender_filter || event.gender_filter === 'everyone') return true
+        if (gender === 'man') return event.gender_filter !== 'women'
+        if (gender === 'woman') return event.gender_filter !== 'men'
+        return true // other o null: vede tutto
+      })
+
+      setEvents(filtered)
+
       const { data: attendeesData } = await supabase
         .from('event_attendees')
         .select('event_id, user_id')
@@ -65,7 +95,7 @@ export default function ExplorePage() {
     } else {
       await supabase.from('event_attendees').insert({ event_id: eventId, user_id: user.id })
     }
-    await loadEvents()
+    await loadEvents(userGender)
     setLoadingJoin(null)
   }
 
@@ -89,7 +119,12 @@ export default function ExplorePage() {
   const filteredEvents = filter === 'all' ? events : events.filter(e => e.category === filter)
 
   return (
-    <main style={{padding:'24px 20px', maxWidth:'900px', margin:'0 auto'}}>
+    <main style={{
+      padding: '24px 20px',
+      paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth: '900px',
+      margin: '0 auto',
+    }}>
 
       {/* HEADER */}
       <div style={{marginBottom:'20px'}}>
@@ -112,7 +147,8 @@ export default function ExplorePage() {
               color: filter === f.value ? 'white' : 'var(--text-2)',
               fontSize:'13px', fontWeight:'500', cursor:'pointer',
               whiteSpace:'nowrap', flexShrink:0,
-              boxShadow: filter === f.value ? '0 2px 8px rgba(29,158,117,0.3)' : 'none'
+              boxShadow: filter === f.value ? '0 2px 8px rgba(29,158,117,0.3)' : 'none',
+              minHeight:'auto',
             }}
           >
             {f.label}
@@ -138,6 +174,7 @@ export default function ExplorePage() {
             const spots = event.max_attendees - count
             const cfg = categoryConfig[event.category] || { color:'var(--green)', bg:'var(--green-light)', icon:'🌍' }
             const isLoading = loadingJoin === event.id
+            const creatorName = event.profiles?.display_name || null
 
             return (
               <div
@@ -161,7 +198,7 @@ export default function ExplorePage() {
                   ;(e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow)'
                 }}
               >
-                {/* TOP ROW */}
+                {/* BADGES */}
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
                   <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
                     <span style={{fontSize:'11px', fontWeight:'700', color: cfg.color, background: cfg.bg, padding:'3px 10px', borderRadius:'100px', textTransform:'uppercase', letterSpacing:'0.04em'}}>
@@ -179,9 +216,16 @@ export default function ExplorePage() {
                 </div>
 
                 {/* TITLE */}
-                <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'8px', lineHeight:'1.3', fontFamily:'Syne, sans-serif'}}>
+                <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'4px', lineHeight:'1.3', fontFamily:'Syne, sans-serif'}}>
                   {event.title}
                 </h3>
+
+                {/* HOSTED BY */}
+                {creatorName && (
+                  <p style={{fontSize:'12px', color:'var(--text-3)', marginBottom:'8px'}}>
+                    by <span style={{fontWeight:'500', color:'var(--text-2)'}}>{creatorName}</span>
+                  </p>
+                )}
 
                 {/* META */}
                 <div style={{display:'flex', flexDirection:'column', gap:'4px', marginBottom:'14px'}}>
@@ -196,7 +240,7 @@ export default function ExplorePage() {
                 )}
 
                 {/* FOOTER */}
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)', gap:'8px'}}>
                   <div style={{display:'flex', flexDirection:'column', gap:'2px'}}>
                     <span style={{fontSize:'12px', color:'var(--text-3)'}}>{count} joined</span>
                     <span style={{fontSize:'12px', color: spots <= 2 ? '#C04A20' : 'var(--green)', fontWeight:'600'}}>
@@ -212,7 +256,8 @@ export default function ExplorePage() {
                       color: joined ? 'var(--green-dark)' : 'white',
                       border:'none', borderRadius:'100px',
                       fontSize:'13px', fontWeight:'600', cursor:'pointer',
-                      boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)'
+                      boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)',
+                      minHeight:'auto', flexShrink:0,
                     }}
                   >
                     {isLoading ? '...' : joined ? '✓ Joined' : spots === 0 ? 'Full' : 'Join'}

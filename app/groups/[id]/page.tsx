@@ -65,7 +65,13 @@ export default function GroupPage({ params }: { params: { id: string } }) {
   const avatarColors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
 
   return (
-    <main style={{padding:'24px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
+    <main style={{
+      padding:'24px 20px',
+      paddingBottom:'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth:'600px',
+      margin:'0 auto',
+      fontFamily:'sans-serif',
+    }}>
 
       <a href="/groups" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
         ← Back to groups
@@ -77,7 +83,7 @@ export default function GroupPage({ params }: { params: { id: string } }) {
           <div style={{width:'60px', height:'60px', borderRadius:'16px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'28px', flexShrink:0}}>
             {cfg.icon}
           </div>
-          <div>
+          <div style={{flex:1, minWidth:0}}>
             <h1 style={{fontSize:'22px', fontWeight:'800', fontFamily:'Syne, sans-serif', marginBottom:'4px'}}>{group.name}</h1>
             <span style={{fontSize:'11px', fontWeight:'700', color: cfg.color, textTransform:'uppercase', letterSpacing:'0.04em'}}>{group.category}</span>
           </div>
@@ -87,8 +93,8 @@ export default function GroupPage({ params }: { params: { id: string } }) {
           <p style={{fontSize:'14px', color:'var(--text-2)', lineHeight:'1.6', marginBottom:'16px'}}>{group.description}</p>
         )}
 
-        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', paddingTop:'16px', borderTop:'1px solid var(--border)', marginBottom:'10px'}}>
-          <span style={{fontSize:'14px', color:'var(--text-3)'}}>👥 {members.length} members</span>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', paddingTop:'16px', borderTop:'1px solid var(--border)', marginBottom:'12px', gap:'12px'}}>
+          <span style={{fontSize:'14px', color:'var(--text-3)', flexShrink:0}}>👥 {members.length} members</span>
           <button
             onMouseDown={toggleJoin}
             disabled={loading}
@@ -98,7 +104,8 @@ export default function GroupPage({ params }: { params: { id: string } }) {
               color: joined ? 'var(--green-dark)' : 'white',
               border:'none', borderRadius:'100px',
               fontSize:'14px', fontWeight:'700', cursor:'pointer',
-              boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)'
+              boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)',
+              flexShrink:0,
             }}
           >
             {loading ? '...' : joined ? '✓ Member' : 'Join group →'}
@@ -107,7 +114,7 @@ export default function GroupPage({ params }: { params: { id: string } }) {
 
         <a 
           href={`/groups/${params.id}/chat`}
-          style={{display:'block', width:'100%', padding:'14px', background:'#f5f5f5', color:'#1a1a1a', borderRadius:'100px', fontSize:'14px', fontWeight:'700', cursor:'pointer', textAlign:'center', textDecoration:'none', boxSizing:'border-box'}}
+          style={{display:'block', width:'100%', padding:'14px', background:'var(--bg)', color:'var(--text)', borderRadius:'100px', fontSize:'14px', fontWeight:'700', cursor:'pointer', textAlign:'center', textDecoration:'none', border:'1px solid var(--border)', boxSizing:'border-box'}}
         >
           💬 Open group chat
         </a>
@@ -143,7 +150,7 @@ export default function GroupPage({ params }: { params: { id: string } }) {
                       ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
                       : initial}
                   </div>
-                  <div style={{flex:1}}>
+                  <div style={{flex:1, minWidth:0}}>
                     <div style={{fontSize:'14px', fontWeight:'600'}}>{name}</div>
                     {profile?.location && (
                       <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>
@@ -158,7 +165,7 @@ export default function GroupPage({ params }: { params: { id: string } }) {
                       </div>
                     )}
                   </div>
-                  <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
+                  <span style={{fontSize:'18px', color:'var(--text-3)', flexShrink:0}}>→</span>
                 </div>
               )
             })}

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 export default function EventPage({ params }: { params: { id: string } }) {
   const [event, setEvent] = useState<any>(null)
+  const [creator, setCreator] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [attendees, setAttendees] = useState<any[]>([])
   const [joined, setJoined] = useState(false)
@@ -29,10 +30,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const loadEvent = async (userId: string) => {
     const { data: eventData } = await supabase
       .from('events')
-      .select('*')
+      .select('*, profiles!events_creator_id_fkey(display_name, avatar_url)')
       .eq('id', params.id)
       .single()
-    if (eventData) { setEvent(eventData); setEditForm(eventData) }
+
+    if (eventData) {
+      setEvent(eventData)
+      setEditForm(eventData)
+      setCreator(eventData.profiles || null)
+    }
 
     const { data: attendeesData } = await supabase
       .from('event_attendees')
@@ -105,7 +111,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   }
 
   if (!event) return (
-    <main style={{padding:'32px 24px', fontFamily:'sans-serif', textAlign:'center', color:'var(--text-3)'}}>
+    <main style={{padding:'32px 24px', textAlign:'center', color:'var(--text-3)'}}>
       Loading...
     </main>
   )
@@ -114,10 +120,22 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const color = categoryColor[event.category] || '#1D9E75'
   const isCreator = user?.id === event.creator_id
   const isPast = event.date < new Date().toISOString().split('T')[0]
-  const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : null
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    : null
+
+  const creatorEntry = { user_id: event.creator_id, isHost: true, profiles: creator }
+  const otherAttendees = attendees.filter(a => a.user_id !== event.creator_id)
+  const displayAttendees = [creatorEntry, ...otherAttendees]
 
   return (
-    <main style={{padding:'24px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
+    <main style={{
+      padding: '24px 20px',
+      paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth: '600px',
+      margin: '0 auto',
+      fontFamily: 'sans-serif',
+    }}>
 
       <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
         ← Back to events
@@ -125,6 +143,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
       <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)', marginBottom:'16px'}}>
 
+        {/* BADGES */}
         <div style={{display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'14px'}}>
           <span style={{fontSize:'11px', fontWeight:'700', color, background: color + '18', padding:'3px 10px', borderRadius:'100px', textTransform:'uppercase'}}>{event.category}</span>
           {event.event_type === 'group' && (
@@ -174,15 +193,32 @@ export default function EventPage({ params }: { params: { id: string } }) {
           </div>
         ) : (
           <>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
-              <h1 style={{fontSize:'24px', fontWeight:'800', fontFamily:'Syne, sans-serif', marginBottom:'12px', flex:1}}>{event.title}</h1>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px'}}>
+              <h1 style={{fontSize:'24px', fontWeight:'800', fontFamily:'Syne, sans-serif', marginBottom:'8px', flex:1}}>{event.title}</h1>
               {isCreator && (
-                <div style={{display:'flex', gap:'8px', marginLeft:'12px', flexShrink:0}}>
+                <div style={{display:'flex', gap:'8px', flexShrink:0}}>
                   <button onMouseDown={() => setEditing(true)} style={{padding:'6px 12px', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'100px', fontSize:'12px', fontWeight:'600', cursor:'pointer'}}>✏️ Edit</button>
                   <button onMouseDown={deleteEvent} disabled={deleting} style={{padding:'6px 12px', background:'#FEE2E2', color:'#DC2626', border:'none', borderRadius:'100px', fontSize:'12px', fontWeight:'600', cursor:'pointer'}}>🗑️</button>
                 </div>
               )}
             </div>
+
+            {/* HOSTED BY */}
+            {creator?.display_name && (
+              <div
+                onMouseDown={() => window.location.href = `/users/${event.creator_id}`}
+                style={{display:'inline-flex', alignItems:'center', gap:'7px', marginBottom:'14px', cursor:'pointer', padding:'5px 10px 5px 5px', borderRadius:'100px', border:'1px solid var(--border)', background:'var(--bg)'}}
+              >
+                <div style={{width:'22px', height:'22px', borderRadius:'50%', overflow:'hidden', background:'#9FE1CB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', flexShrink:0}}>
+                  {creator.avatar_url
+                    ? <img src={creator.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={creator.display_name} />
+                    : creator.display_name[0]?.toUpperCase()}
+                </div>
+                <span style={{fontSize:'12px', color:'var(--text-3)'}}>
+                  Hosted by <span style={{fontWeight:'600', color:'var(--text-2)'}}>{creator.display_name}</span>
+                </span>
+              </div>
+            )}
 
             {event.description && (
               <p style={{fontSize:'15px', color:'var(--text-2)', marginBottom:'16px', lineHeight:'1.6'}}>{event.description}</p>
@@ -225,7 +261,10 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
             {isPast && joined && !isCreator && (
               <button
-                onMouseDown={() => { setShowReviewForm(!showReviewForm); if (myReview) { setReviewRating(myReview.rating); setReviewComment(myReview.comment || '') } }}
+                onMouseDown={() => {
+                  setShowReviewForm(!showReviewForm)
+                  if (myReview) { setReviewRating(myReview.rating); setReviewComment(myReview.comment || '') }
+                }}
                 style={{width:'100%', padding:'14px', background:'var(--green-light)', color:'var(--green-dark)', border:'none', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer', marginBottom:'10px'}}
               >
                 {myReview ? '✏️ Edit your review' : '⭐ Leave a review'}
@@ -237,13 +276,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                 <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'10px'}}>Your rating</p>
                 <div style={{display:'flex', gap:'8px', marginBottom:'14px'}}>
                   {[1,2,3,4,5].map(star => (
-                    <span
-                      key={star}
-                      onMouseDown={() => setReviewRating(star)}
-                      style={{fontSize:'28px', cursor:'pointer', opacity: star <= reviewRating ? 1 : 0.3}}
-                    >
-                      ⭐
-                    </span>
+                    <span key={star} onMouseDown={() => setReviewRating(star)} style={{fontSize:'28px', cursor:'pointer', opacity: star <= reviewRating ? 1 : 0.3}}>⭐</span>
                   ))}
                 </div>
                 <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px'}}>Comment (optional)</p>
@@ -274,58 +307,52 @@ export default function EventPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* ATTENDEES */}
+      {/* WHO'S GOING */}
       <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)', marginBottom:'16px'}}>
         <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>
-          {"Who's going"} ({attendees.length})
+          {"Who's going"} ({displayAttendees.length})
         </h2>
-
-        {attendees.length === 0 ? (
-          <div style={{textAlign:'center', padding:'24px', color:'var(--text-3)'}}>
-            <div style={{fontSize:'32px', marginBottom:'8px'}}>👋</div>
-            <p style={{fontSize:'14px'}}>Be the first to join!</p>
-          </div>
-        ) : (
-          <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-            {attendees.map((a: any, i: number) => {
-              const profile = a.profiles
-              const name = profile?.display_name || 'Anonymous'
-              const initial = name[0]?.toUpperCase() || '?'
-              const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
-              const bg = colors[i % colors.length]
-
-              return (
-                <div
-                  key={a.user_id}
-                  onMouseDown={() => window.location.href = `/users/${a.user_id}`}
-                  style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}
-                >
-                  <div style={{width:'44px', height:'44px', borderRadius:'50%', overflow:'hidden', flexShrink:0, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', color:'#333'}}>
-                    {profile?.avatar_url
-                      ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
-                      : initial}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:'14px', fontWeight:'600'}}>{name}</div>
-                    {profile?.location && (
-                      <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>
-                    )}
-                    {profile?.interests?.length > 0 && (
-                      <div style={{display:'flex', gap:'4px', marginTop:'4px', flexWrap:'wrap'}}>
-                        {profile.interests.slice(0, 3).map((interest: string) => (
-                          <span key={interest} style={{fontSize:'11px', padding:'2px 8px', background:'var(--bg)', borderRadius:'100px', color:'var(--text-2)'}}>
-                            {interest}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
+        <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+          {displayAttendees.map((a: any, i: number) => {
+            const profile = a.profiles
+            const name = profile?.display_name || 'Anonymous'
+            const initial = name[0]?.toUpperCase() || '?'
+            const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
+            const bg = colors[i % colors.length]
+            return (
+              <div
+                key={a.user_id}
+                onMouseDown={() => window.location.href = `/users/${a.user_id}`}
+                style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border: a.isHost ? '1.5px solid var(--green)' : '1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer', background: a.isHost ? 'var(--green-light)' : 'white'}}
+              >
+                <div style={{width:'44px', height:'44px', borderRadius:'50%', overflow:'hidden', flexShrink:0, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', color:'#333'}}>
+                  {profile?.avatar_url
+                    ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
+                    : initial}
                 </div>
-              )
-            })}
-          </div>
-        )}
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px', flexWrap:'wrap'}}>
+                    <span style={{fontSize:'14px', fontWeight:'600'}}>{name}</span>
+                    {a.isHost && (
+                      <span style={{fontSize:'10px', fontWeight:'700', color:'var(--green-dark)', background:'var(--green-mid)', padding:'2px 7px', borderRadius:'100px'}}>HOST</span>
+                    )}
+                  </div>
+                  {profile?.location && <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>}
+                  {profile?.interests?.length > 0 && (
+                    <div style={{display:'flex', gap:'4px', marginTop:'4px', flexWrap:'wrap'}}>
+                      {profile.interests.slice(0, 3).map((interest: string) => (
+                        <span key={interest} style={{fontSize:'11px', padding:'2px 8px', background:'white', borderRadius:'100px', color:'var(--text-2)', border:'1px solid var(--border)'}}>
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span style={{fontSize:'18px', color: a.isHost ? 'var(--green)' : 'var(--text-3)', flexShrink:0}}>→</span>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* REVIEWS */}
@@ -341,7 +368,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
               return (
                 <div key={review.id} style={{padding:'14px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)'}}>
                   <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px'}}>
-                    <div style={{width:'32px', height:'32px', borderRadius:'50%', background:'#9FE1CB', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:'700'}}>
+                    <div style={{width:'32px', height:'32px', borderRadius:'50%', background:'#9FE1CB', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:'700', flexShrink:0}}>
                       {review.profiles?.avatar_url
                         ? <img src={review.profiles.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
                         : initial}
@@ -358,6 +385,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
+
     </main>
   )
 }

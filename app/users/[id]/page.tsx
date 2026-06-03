@@ -14,10 +14,12 @@ const CATEGORY_CONFIG: Record<string, { icon: string; bg: string; color: string 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const [profile, setProfile] = useState<any>(null)
   const [events, setEvents] = useState<any[]>([])
+  const [eventReviews, setEventReviews] = useState<Record<string, any[]>>({})
+  const [allReviews, setAllReviews] = useState<any[]>([])
   const [attended, setAttended] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [tab, setTab] = useState<'events' | 'attended' | 'groups'>('events')
+  const [tab, setTab] = useState<'events' | 'attended' | 'groups' | 'reviews'>('events')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -40,7 +42,28 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       .select('id, title, category, date, location')
       .eq('creator_id', params.id)
       .order('date', { ascending: false })
-    if (created) setEvents(created)
+    if (created) {
+      setEvents(created)
+
+      if (created.length > 0) {
+        const eventIds = created.map((e: any) => e.id)
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('*, profiles(display_name, avatar_url)')
+          .in('event_id', eventIds)
+          .order('created_at', { ascending: false })
+
+        if (reviewsData) {
+          const byEvent: Record<string, any[]> = {}
+          reviewsData.forEach((r: any) => {
+            if (!byEvent[r.event_id]) byEvent[r.event_id] = []
+            byEvent[r.event_id].push(r)
+          })
+          setEventReviews(byEvent)
+          setAllReviews(reviewsData)
+        }
+      }
+    }
 
     const { data: groupMembers } = await supabase
       .from('group_members')
@@ -67,14 +90,25 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const isMe = currentUser?.id === params.id
   const showAttended = profile.show_attended || isMe
 
+  const globalAvgRating = allReviews.length > 0
+    ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(1)
+    : null
+
   const tabs = [
     { key: 'events', label: `Activities Created (${events.length})` },
     ...(showAttended ? [{ key: 'attended', label: `Activities Attended (${attended.length})` }] : []),
     { key: 'groups', label: `Groups Joined (${groups.length})` },
+    ...(allReviews.length > 0 ? [{ key: 'reviews', label: `Reviews (${allReviews.length})` }] : []),
   ]
 
   return (
-    <main style={{padding:'24px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
+    <main style={{
+      padding: '24px',
+      paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth: '600px',
+      margin: '0 auto',
+      fontFamily: 'sans-serif',
+    }}>
 
       <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
         ← Back
@@ -89,7 +123,16 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         </div>
 
         <h1 style={{fontSize:'22px', fontWeight:'800', fontFamily:'Syne, sans-serif', marginBottom:'4px'}}>{profile.display_name || 'Anonymous'}</h1>
-        {profile.location && <p style={{fontSize:'14px', color:'var(--text-3)', marginBottom:'12px'}}>📍 {profile.location}</p>}
+        {profile.location && <p style={{fontSize:'14px', color:'var(--text-3)', marginBottom:'8px'}}>📍 {profile.location}</p>}
+
+        {globalAvgRating && (
+          <div style={{display:'inline-flex', alignItems:'center', gap:'6px', background:'#FEF3C7', borderRadius:'100px', padding:'4px 12px', marginBottom:'12px'}}>
+            <span style={{fontSize:'14px'}}>⭐</span>
+            <span style={{fontSize:'13px', fontWeight:'700', color:'#9A6200'}}>{globalAvgRating}</span>
+            <span style={{fontSize:'12px', color:'#9A6200'}}>· {allReviews.length} {allReviews.length === 1 ? 'review' : 'reviews'}</span>
+          </div>
+        )}
+
         {profile.bio && <p style={{fontSize:'14px', color:'var(--text-2)', lineHeight:'1.6', marginBottom:'16px'}}>{profile.bio}</p>}
 
         {profile.interests?.length > 0 && (
@@ -125,6 +168,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       {/* CONTENT */}
       <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)'}}>
 
+        {/* ACTIVITIES CREATED */}
         {tab === 'events' && (
           <>
             <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Activities Created ({events.length})</h2>
@@ -138,12 +182,28 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
               <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
                 {events.map(event => {
                   const cfg = CATEGORY_CONFIG[event.category] || { icon:'🌍', bg:'#E1F5EE', color:'#1D9E75' }
+                  const reviews = eventReviews[event.id] || []
+                  const avg = reviews.length > 0
+                    ? (reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length).toFixed(1)
+                    : null
+
                   return (
-                    <div key={event.id} onMouseDown={() => window.location.href = `/events/${event.id}`} style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}>
+                    <div
+                      key={event.id}
+                      onMouseDown={() => window.location.href = `/events/${event.id}`}
+                      style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer'}}
+                    >
                       <div style={{width:'40px', height:'40px', borderRadius:'10px', background: cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0}}>{cfg.icon}</div>
                       <div style={{flex:1}}>
-                        <div style={{fontSize:'14px', fontWeight:'600'}}>{event.title}</div>
+                        <div style={{fontSize:'14px', fontWeight:'600', marginBottom:'2px'}}>{event.title}</div>
                         <div style={{fontSize:'12px', color:'var(--text-3)'}}>📅 {event.date} · 📍 {event.location}</div>
+                        {avg && (
+                          <div style={{display:'inline-flex', alignItems:'center', gap:'4px', marginTop:'4px', background:'#FEF3C7', borderRadius:'100px', padding:'2px 8px'}}>
+                            <span style={{fontSize:'11px'}}>⭐</span>
+                            <span style={{fontSize:'11px', fontWeight:'700', color:'#9A6200'}}>{avg}</span>
+                            <span style={{fontSize:'11px', color:'#9A6200'}}>({reviews.length})</span>
+                          </div>
+                        )}
                       </div>
                       <span style={{fontSize:'18px', color:'var(--text-3)'}}>→</span>
                     </div>
@@ -154,6 +214,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
           </>
         )}
 
+        {/* ACTIVITIES ATTENDED */}
         {tab === 'attended' && showAttended && (
           <>
             <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Activities Attended ({attended.length})</h2>
@@ -182,6 +243,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
           </>
         )}
 
+        {/* GROUPS */}
         {tab === 'groups' && (
           <>
             <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>Groups Joined ({groups.length})</h2>
@@ -210,6 +272,55 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             )}
           </>
         )}
+
+        {/* REVIEWS RICEVUTE */}
+        {tab === 'reviews' && (
+          <>
+            <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'4px'}}>
+              Reviews ({allReviews.length})
+            </h2>
+            {globalAvgRating && (
+              <p style={{fontSize:'13px', color:'var(--text-3)', marginBottom:'16px'}}>
+                Average rating: <span style={{fontWeight:'700', color:'#9A6200'}}>⭐ {globalAvgRating}</span>
+              </p>
+            )}
+            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+              {allReviews.map((review: any) => {
+                const name = review.profiles?.display_name || 'Anonymous'
+                const initial = name[0]?.toUpperCase() || '?'
+                const eventTitle = events.find(e => e.id === review.event_id)?.title || null
+
+                return (
+                  <div key={review.id} style={{padding:'14px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)'}}>
+                    {eventTitle && (
+                      <div
+                        onMouseDown={() => window.location.href = `/events/${review.event_id}`}
+                        style={{fontSize:'11px', fontWeight:'600', color:'var(--green-dark)', background:'var(--green-light)', padding:'3px 10px', borderRadius:'100px', display:'inline-block', marginBottom:'10px', cursor:'pointer'}}
+                      >
+                        {eventTitle}
+                      </div>
+                    )}
+                    <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px'}}>
+                      <div style={{width:'32px', height:'32px', borderRadius:'50%', background:'#9FE1CB', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:'700', flexShrink:0}}>
+                        {review.profiles?.avatar_url
+                          ? <img src={review.profiles.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
+                          : initial}
+                      </div>
+                      <div>
+                        <div style={{fontSize:'13px', fontWeight:'600'}}>{name}</div>
+                        <div style={{fontSize:'12px', color:'var(--text-3)'}}>{'⭐'.repeat(review.rating)}</div>
+                      </div>
+                    </div>
+                    {review.comment && (
+                      <p style={{fontSize:'13px', color:'var(--text-2)', lineHeight:'1.5'}}>{review.comment}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
       </div>
     </main>
   )

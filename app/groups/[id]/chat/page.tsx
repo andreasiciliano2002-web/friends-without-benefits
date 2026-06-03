@@ -10,6 +10,7 @@ export default function GroupChatPage({ params }: { params: { id: string } }) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -60,6 +61,7 @@ export default function GroupChatPage({ params }: { params: { id: string } }) {
     })
     setText('')
     setSending(false)
+    inputRef.current?.focus()
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -78,22 +80,63 @@ export default function GroupChatPage({ params }: { params: { id: string } }) {
   const colorFor = (id: string) => colors[id.charCodeAt(0) % colors.length]
 
   return (
-    <main style={{display:'flex', flexDirection:'column', height:'100vh', fontFamily:'sans-serif', background:'#F5F3EE'}}>
+    <div style={{
+      display:'flex',
+      flexDirection:'column',
+      height:'100dvh',
+      background:'var(--bg)',
+      fontFamily:'DM Sans, sans-serif',
+      overflow:'hidden',
+    }}>
 
       {/* HEADER */}
-      <div style={{background:'white', borderBottom:'1px solid var(--border)', padding:'14px 20px', display:'flex', alignItems:'center', gap:'12px', flexShrink:0}}>
-        <a href={`/groups/${params.id}`} style={{color:'var(--text-3)', textDecoration:'none', fontSize:'20px'}}>←</a>
-        <div>
-          <div style={{fontSize:'16px', fontWeight:'700', fontFamily:'Syne, sans-serif'}}>{group?.name || 'Group chat'}</div>
+      <div style={{
+        background:'white',
+        borderBottom:'1px solid var(--border)',
+        padding:'12px 16px',
+        display:'flex',
+        alignItems:'center',
+        gap:'12px',
+        flexShrink:0,
+        paddingTop:'calc(12px + env(safe-area-inset-top))',
+      }}>
+        <a 
+          href={`/groups/${params.id}`}
+          style={{
+            width:'36px', height:'36px',
+            borderRadius:'50%',
+            background:'var(--bg)',
+            border:'1px solid var(--border)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            textDecoration:'none',
+            fontSize:'16px',
+            flexShrink:0,
+            color:'var(--text)',
+          }}
+        >
+          ←
+        </a>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{fontSize:'15px', fontWeight:'700', fontFamily:'Syne, sans-serif', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+            {group?.name || 'Group chat'}
+          </div>
           <div style={{fontSize:'12px', color:'var(--text-3)'}}>Group chat</div>
         </div>
       </div>
 
       {/* MESSAGES */}
-      <div style={{flex:1, overflowY:'auto', padding:'16px', display:'flex', flexDirection:'column', gap:'12px'}}>
+      <div style={{
+        flex:1,
+        overflowY:'auto',
+        padding:'16px',
+        display:'flex',
+        flexDirection:'column',
+        gap:'12px',
+        WebkitOverflowScrolling:'touch',
+      }}>
         {messages.length === 0 && (
           <div style={{textAlign:'center', padding:'40px 20px', color:'var(--text-3)'}}>
-            <div style={{fontSize:'32px', marginBottom:'8px'}}>💬</div>
+            <div style={{fontSize:'40px', marginBottom:'8px'}}>💬</div>
             <p style={{fontSize:'14px'}}>No messages yet. Say hi!</p>
           </div>
         )}
@@ -105,20 +148,49 @@ export default function GroupChatPage({ params }: { params: { id: string } }) {
           const bg = colorFor(msg.user_id)
 
           return (
-            <div key={msg.id} style={{display:'flex', flexDirection: isMe ? 'row-reverse' : 'row', gap:'8px', alignItems:'flex-end'}}>
+            <div key={msg.id} style={{
+              display:'flex',
+              flexDirection: isMe ? 'row-reverse' : 'row',
+              gap:'8px',
+              alignItems:'flex-end',
+            }}>
               {!isMe && (
-                <div style={{width:'32px', height:'32px', borderRadius:'50%', background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:'700', flexShrink:0, overflow:'hidden'}}>
+                <div style={{
+                  width:'30px', height:'30px',
+                  borderRadius:'50%',
+                  background:bg,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:'11px', fontWeight:'700',
+                  flexShrink:0, overflow:'hidden',
+                }}>
                   {msg.profiles?.avatar_url
                     ? <img src={msg.profiles.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
                     : initial}
                 </div>
               )}
-              <div style={{maxWidth:'70%'}}>
-                {!isMe && <div style={{fontSize:'11px', color:'var(--text-3)', marginBottom:'3px', paddingLeft:'4px'}}>{name}</div>}
-                <div style={{background: isMe ? 'var(--green)' : 'white', color: isMe ? 'white' : 'var(--text)', padding:'10px 14px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize:'14px', lineHeight:'1.5', boxShadow:'0 1px 3px rgba(0,0,0,0.06)'}}>
+              <div style={{maxWidth:'72%'}}>
+                {!isMe && (
+                  <div style={{fontSize:'11px', color:'var(--text-3)', marginBottom:'3px', paddingLeft:'4px'}}>{name}</div>
+                )}
+                <div style={{
+                  background: isMe ? 'var(--green)' : 'white',
+                  color: isMe ? 'white' : 'var(--text)',
+                  padding:'10px 14px',
+                  borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                  fontSize:'14px',
+                  lineHeight:'1.5',
+                  boxShadow:'0 1px 3px rgba(0,0,0,0.06)',
+                  wordBreak:'break-word',
+                }}>
                   {msg.content}
                 </div>
-                <div style={{fontSize:'10px', color:'var(--text-3)', marginTop:'3px', textAlign: isMe ? 'right' : 'left', paddingLeft:'4px', paddingRight:'4px'}}>
+                <div style={{
+                  fontSize:'10px',
+                  color:'var(--text-3)',
+                  marginTop:'3px',
+                  textAlign: isMe ? 'right' : 'left',
+                  paddingLeft:'4px', paddingRight:'4px',
+                }}>
                   {formatTime(msg.created_at)}
                 </div>
               </div>
@@ -129,23 +201,57 @@ export default function GroupChatPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* INPUT */}
-      <div style={{background:'white', borderTop:'1px solid var(--border)', padding:'12px 16px', display:'flex', gap:'10px', alignItems:'flex-end', flexShrink:0}}>
+      <div style={{
+        background:'white',
+        borderTop:'1px solid var(--border)',
+        padding:'10px 16px',
+        paddingBottom:'calc(10px + env(safe-area-inset-bottom))',
+        display:'flex',
+        gap:'10px',
+        alignItems:'flex-end',
+        flexShrink:0,
+      }}>
         <textarea
+          ref={inputRef}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Type a message... (Enter to send)"
+          placeholder="Type a message..."
           rows={1}
-          style={{flex:1, padding:'10px 14px', border:'1px solid var(--border)', borderRadius:'20px', fontSize:'14px', outline:'none', resize:'none', fontFamily:'sans-serif', lineHeight:'1.5'}}
+          style={{
+            flex:1,
+            padding:'10px 14px',
+            border:'1px solid var(--border)',
+            borderRadius:'20px',
+            fontSize:'15px',
+            outline:'none',
+            resize:'none',
+            fontFamily:'DM Sans, sans-serif',
+            lineHeight:'1.5',
+            background:'var(--bg)',
+            maxHeight:'120px',
+            overflowY:'auto',
+          }}
         />
         <button
           onMouseDown={sendMessage}
           disabled={sending || !text.trim()}
-          style={{width:'40px', height:'40px', borderRadius:'50%', background: text.trim() ? 'var(--green)' : 'var(--bg)', border:'none', cursor: text.trim() ? 'pointer' : 'default', fontSize:'18px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+          style={{
+            width:'42px', height:'42px',
+            borderRadius:'50%',
+            background: text.trim() ? 'var(--green)' : 'var(--border)',
+            border:'none',
+            cursor: text.trim() ? 'pointer' : 'default',
+            fontSize:'18px',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            flexShrink:0,
+            transition:'background 0.15s',
+            color: text.trim() ? 'white' : 'var(--text-3)',
+          }}
         >
-          →
+          ↑
         </button>
       </div>
-    </main>
+    </div>
   )
 }
