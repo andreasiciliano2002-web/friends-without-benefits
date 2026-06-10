@@ -10,6 +10,8 @@ export default function ExplorePage() {
   const [attendees, setAttendees] = useState<Record<string, string[]>>({})
   const [loadingJoin, setLoadingJoin] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -22,16 +24,13 @@ export default function ExplorePage() {
   }, [])
 
   const loadUserAndEvents = async (userId: string) => {
-    // Carica il genere dell'utente
     const { data: profile } = await supabase
       .from('profiles')
       .select('gender')
       .eq('id', userId)
       .single()
-
     const gender = profile?.gender || null
     setUserGender(gender)
-
     loadEvents(gender)
   }
 
@@ -44,17 +43,12 @@ export default function ExplorePage() {
       .order('date', { ascending: true })
 
     if (eventsData) {
-      // Filtra eventi in base al genere:
-      // - man non vede women only
-      // - woman non vede men only
-      // - other (o non specificato) vede tutto
       const filtered = eventsData.filter(event => {
         if (!event.gender_filter || event.gender_filter === 'everyone') return true
         if (gender === 'man') return event.gender_filter !== 'women'
         if (gender === 'woman') return event.gender_filter !== 'men'
-        return true // other o null: vede tutto
+        return true
       })
-
       setEvents(filtered)
 
       const { data: attendeesData } = await supabase
@@ -116,7 +110,50 @@ export default function ExplorePage() {
     { value: 'Music', label: '🎵 Music' },
   ]
 
-  const filteredEvents = filter === 'all' ? events : events.filter(e => e.category === filter)
+  const dateFilters = [
+    { value: 'all', label: '📅 Any time' },
+    { value: 'today', label: '☀️ Today' },
+    { value: 'weekend', label: '🎉 Weekend' },
+    { value: 'week', label: '📆 This week' },
+  ]
+
+  const getDateRange = () => {
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    const dayOfWeek = now.getDay()
+    const daysToSat = dayOfWeek === 6 ? 0 : (6 - dayOfWeek)
+    const sat = new Date(now)
+    sat.setDate(now.getDate() + daysToSat)
+    const sun = new Date(sat)
+    sun.setDate(sat.getDate() + 1)
+    const satStr = sat.toISOString().split('T')[0]
+    const sunStr = sun.toISOString().split('T')[0]
+    const endOfWeek = new Date(now)
+    endOfWeek.setDate(now.getDate() + (7 - dayOfWeek))
+    const endOfWeekStr = endOfWeek.toISOString().split('T')[0]
+    return { today, satStr, sunStr, endOfWeekStr }
+  }
+
+  const { today, satStr, sunStr, endOfWeekStr } = getDateRange()
+
+  const filteredEvents = events
+    .filter(e => filter === 'all' || e.category === filter)
+    .filter(e => {
+      if (dateFilter === 'all') return true
+      if (dateFilter === 'today') return e.date === today
+      if (dateFilter === 'weekend') return e.date === satStr || e.date === sunStr
+      if (dateFilter === 'week') return e.date >= today && e.date <= endOfWeekStr
+      return true
+    })
+    .filter(e => {
+      if (!search.trim()) return true
+      const q = search.toLowerCase()
+      return (
+        e.title?.toLowerCase().includes(q) ||
+        e.description?.toLowerCase().includes(q) ||
+        e.location?.toLowerCase().includes(q)
+      )
+    })
 
   return (
     <main style={{
@@ -131,11 +168,32 @@ export default function ExplorePage() {
         <h1 style={{fontSize:'26px', fontWeight:'800', fontFamily:'Syne, sans-serif', letterSpacing:'-0.5px', marginBottom:'2px'}}>
           Friends Without Benefits
         </h1>
-        <p style={{fontSize:'13px', color:'var(--text-3)'}}>📍 Sydney · {filteredEvents.length} upcoming events</p>
+        <p style={{fontSize:'13px', color:'var(--text-3)'}}>🌍 {filteredEvents.length} upcoming events near you</p>
       </div>
 
-      {/* FILTERS */}
-      <div style={{display:'flex', gap:'8px', marginBottom:'20px', overflowX:'auto', paddingBottom:'4px'}}>
+      {/* SEARCH BAR */}
+      <div style={{position:'relative', marginBottom:'16px'}}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search events, places..."
+          style={{paddingLeft:'40px', background:'white'}}
+        />
+        <span style={{position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', pointerEvents:'none'}}>
+          🔍
+        </span>
+        {search && (
+          <span
+            onMouseDown={() => setSearch('')}
+            style={{position:'absolute', right:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', cursor:'pointer', color:'var(--text-3)'}}
+          >
+            ✕
+          </span>
+        )}
+      </div>
+
+      {/* CATEGORY FILTERS */}
+      <div style={{display:'flex', gap:'8px', marginBottom:'10px', overflowX:'auto', paddingBottom:'4px'}}>
         {filters.map(f => (
           <button
             key={f.value}
@@ -156,15 +214,50 @@ export default function ExplorePage() {
         ))}
       </div>
 
+      {/* DATE FILTERS */}
+      <div style={{display:'flex', gap:'8px', marginBottom:'20px', overflowX:'auto', paddingBottom:'4px'}}>
+        {dateFilters.map(f => (
+          <button
+            key={f.value}
+            onMouseDown={() => setDateFilter(f.value)}
+            style={{
+              padding:'7px 16px', borderRadius:'100px',
+              border:`1.5px solid ${dateFilter === f.value ? '#534AB7' : 'var(--border)'}`,
+              background: dateFilter === f.value ? '#534AB7' : 'white',
+              color: dateFilter === f.value ? 'white' : 'var(--text-2)',
+              fontSize:'13px', fontWeight:'500', cursor:'pointer',
+              whiteSpace:'nowrap', flexShrink:0,
+              boxShadow: dateFilter === f.value ? '0 2px 8px rgba(83,74,183,0.3)' : 'none',
+              minHeight:'auto',
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* EVENTS */}
       {filteredEvents.length === 0 ? (
-        <div style={{textAlign:'center', padding:'60px 20px', color:'var(--text-3)'}}>
-          <div style={{fontSize:'48px', marginBottom:'16px'}}>🌍</div>
-          <h2 style={{fontSize:'20px', fontWeight:'700', marginBottom:'8px', fontFamily:'Syne, sans-serif'}}>No upcoming events</h2>
-          <p style={{fontSize:'14px'}}>Be the first to create one!</p>
-          <a href="/create" style={{display:'inline-block', marginTop:'20px', padding:'12px 24px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontWeight:'600', fontSize:'14px'}}>
-            Create first event →
-          </a>
+        <div style={{textAlign:'center', padding:'60px 20px', color:'var(--text-3)', maxWidth:'320px', margin:'0 auto'}}>
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{margin:'0 auto 24px', display:'block'}}>
+            <circle cx="60" cy="60" r="60" fill="#E1F5EE"/>
+            <circle cx="60" cy="45" r="16" fill="#9FE1CB"/>
+            <path d="M30 95c0-16.569 13.431-30 30-30s30 13.431 30 30" stroke="#1D9E75" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <circle cx="85" cy="35" r="8" fill="#B5D4F4"/>
+            <circle cx="35" cy="38" r="6" fill="#FAC775"/>
+            <path d="M60 72v8M56 76h8" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <h2 style={{fontSize:'20px', fontWeight:'800', marginBottom:'8px', fontFamily:'Syne, sans-serif', color:'var(--text)'}}>
+            {search ? 'No results found' : 'No upcoming events'}
+          </h2>
+          <p style={{fontSize:'14px', lineHeight:'1.6', marginBottom:'24px'}}>
+            {search ? `No events matching "${search}"` : dateFilter !== 'all' ? 'Try a different time range' : 'Be the first to create something great!'}
+          </p>
+          {!search && dateFilter === 'all' && (
+            <a href="/my-events" style={{display:'inline-block', padding:'12px 24px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontWeight:'600', fontSize:'14px', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}>
+              Create first event →
+            </a>
+          )}
         </div>
       ) : (
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(290px, 1fr))', gap:'14px'}}>
@@ -184,7 +277,7 @@ export default function ExplorePage() {
                   background:'white',
                   border:'1px solid var(--border)',
                   borderRadius:'var(--radius)',
-                  padding:'18px',
+                  overflow:'hidden',
                   cursor:'pointer',
                   boxShadow:'var(--shadow)',
                   transition:'transform 0.15s, box-shadow 0.15s',
@@ -198,70 +291,75 @@ export default function ExplorePage() {
                   ;(e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow)'
                 }}
               >
-                {/* BADGES */}
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
-                  <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
-                    <span style={{fontSize:'11px', fontWeight:'700', color: cfg.color, background: cfg.bg, padding:'3px 10px', borderRadius:'100px', textTransform:'uppercase', letterSpacing:'0.04em'}}>
-                      {cfg.icon} {event.category}
-                    </span>
-                    {event.event_type === 'group' && (
-                      <span style={{fontSize:'11px', fontWeight:'600', color:'#9A6200', background:'#FEF3C7', padding:'3px 10px', borderRadius:'100px'}}>👥 Group</span>
-                    )}
-                    {event.gender_filter && event.gender_filter !== 'everyone' && (
-                      <span style={{fontSize:'11px', fontWeight:'600', color:'#534AB7', background:'#EEEDFE', padding:'3px 10px', borderRadius:'100px'}}>
-                        {event.gender_filter === 'women' ? '👩 Women' : '👨 Men'}
+                {event.cover_url && (
+                  <img
+                    src={event.cover_url}
+                    style={{width:'100%', height:'140px', objectFit:'cover', display:'block'}}
+                    alt={event.title}
+                  />
+                )}
+
+                <div style={{padding:'18px'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
+                    <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
+                      <span style={{fontSize:'11px', fontWeight:'700', color: cfg.color, background: cfg.bg, padding:'3px 10px', borderRadius:'100px', textTransform:'uppercase', letterSpacing:'0.04em'}}>
+                        {cfg.icon} {event.category}
                       </span>
-                    )}
+                      {event.event_type === 'group' && (
+                        <span style={{fontSize:'11px', fontWeight:'600', color:'#9A6200', background:'#FEF3C7', padding:'3px 10px', borderRadius:'100px'}}>👥 Group</span>
+                      )}
+                      {event.gender_filter && event.gender_filter !== 'everyone' && (
+                        <span style={{fontSize:'11px', fontWeight:'600', color:'#534AB7', background:'#EEEDFE', padding:'3px 10px', borderRadius:'100px'}}>
+                          {event.gender_filter === 'women' ? '👩 Women' : '👨 Men'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* TITLE */}
-                <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'4px', lineHeight:'1.3', fontFamily:'Syne, sans-serif'}}>
-                  {event.title}
-                </h3>
+                  <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'4px', lineHeight:'1.3', fontFamily:'Syne, sans-serif'}}>
+                    {event.title}
+                  </h3>
 
-                {/* HOSTED BY */}
-                {creatorName && (
-                  <p style={{fontSize:'12px', color:'var(--text-3)', marginBottom:'8px'}}>
-                    by <span style={{fontWeight:'500', color:'var(--text-2)'}}>{creatorName}</span>
-                  </p>
-                )}
+                  {creatorName && (
+                    <p style={{fontSize:'12px', color:'var(--text-3)', marginBottom:'8px'}}>
+                      by <span style={{fontWeight:'500', color:'var(--text-2)'}}>{creatorName}</span>
+                    </p>
+                  )}
 
-                {/* META */}
-                <div style={{display:'flex', flexDirection:'column', gap:'4px', marginBottom:'14px'}}>
-                  <span style={{fontSize:'13px', color:'var(--text-2)'}}>📅 {event.date} {event.time && `· ${event.time}`}</span>
-                  <span style={{fontSize:'13px', color:'var(--text-2)'}}>📍 {event.location}</span>
-                </div>
-
-                {event.description && (
-                  <p style={{fontSize:'13px', color:'var(--text-3)', marginBottom:'14px', lineHeight:'1.5', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
-                    {event.description}
-                  </p>
-                )}
-
-                {/* FOOTER */}
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)', gap:'8px'}}>
-                  <div style={{display:'flex', flexDirection:'column', gap:'2px'}}>
-                    <span style={{fontSize:'12px', color:'var(--text-3)'}}>{count} joined</span>
-                    <span style={{fontSize:'12px', color: spots <= 2 ? '#C04A20' : 'var(--green)', fontWeight:'600'}}>
-                      {spots} spots left
-                    </span>
+                  <div style={{display:'flex', flexDirection:'column', gap:'4px', marginBottom:'14px'}}>
+                    <span style={{fontSize:'13px', color:'var(--text-2)'}}>📅 {event.date} {event.time && `· ${event.time}`}</span>
+                    <span style={{fontSize:'13px', color:'var(--text-2)'}}>📍 {event.location}</span>
                   </div>
-                  <button
-                    onMouseDown={(e) => toggleJoin(event.id, e)}
-                    disabled={isLoading || (!joined && spots === 0)}
-                    style={{
-                      padding:'8px 18px',
-                      background: joined ? 'var(--green-light)' : 'var(--green)',
-                      color: joined ? 'var(--green-dark)' : 'white',
-                      border:'none', borderRadius:'100px',
-                      fontSize:'13px', fontWeight:'600', cursor:'pointer',
-                      boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)',
-                      minHeight:'auto', flexShrink:0,
-                    }}
-                  >
-                    {isLoading ? '...' : joined ? '✓ Joined' : spots === 0 ? 'Full' : 'Join'}
-                  </button>
+
+                  {event.description && (
+                    <p style={{fontSize:'13px', color:'var(--text-3)', marginBottom:'14px', lineHeight:'1.5', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
+                      {event.description}
+                    </p>
+                  )}
+
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)', gap:'8px'}}>
+                    <div style={{display:'flex', flexDirection:'column', gap:'2px'}}>
+                      <span style={{fontSize:'12px', color:'var(--text-3)'}}>{count} joined</span>
+                      <span style={{fontSize:'12px', color: spots <= 2 ? '#C04A20' : 'var(--green)', fontWeight:'600'}}>
+                        {spots} spots left
+                      </span>
+                    </div>
+                    <button
+                      onMouseDown={(e) => toggleJoin(event.id, e)}
+                      disabled={isLoading || (!joined && spots === 0)}
+                      style={{
+                        padding:'8px 18px',
+                        background: joined ? 'var(--green-light)' : 'var(--green)',
+                        color: joined ? 'var(--green-dark)' : 'white',
+                        border:'none', borderRadius:'100px',
+                        fontSize:'13px', fontWeight:'600', cursor:'pointer',
+                        boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)',
+                        minHeight:'auto', flexShrink:0,
+                      }}
+                    >
+                      {isLoading ? '...' : joined ? '✓ Joined' : spots === 0 ? 'Full' : 'Join'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )

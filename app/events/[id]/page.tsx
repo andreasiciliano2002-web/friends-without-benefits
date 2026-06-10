@@ -19,15 +19,22 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [savingReview, setSavingReview] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) window.location.href = '/login'
-      else { setUser(data.user); loadEvent(data.user.id) }
+      if (data.user) {
+        setUser(data.user)
+        loadEvent(data.user.id)
+      } else {
+        loadEvent(null)
+      }
+      setAuthChecked(true)
     })
   }, [])
 
-  const loadEvent = async (userId: string) => {
+  const loadEvent = async (userId: string | null) => {
     const { data: eventData } = await supabase
       .from('events')
       .select('*, profiles!events_creator_id_fkey(display_name, avatar_url)')
@@ -46,7 +53,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
       .eq('event_id', params.id)
     if (attendeesData) {
       setAttendees(attendeesData)
-      setJoined(attendeesData.some((a: any) => a.user_id === userId))
+      if (userId) setJoined(attendeesData.some((a: any) => a.user_id === userId))
     }
 
     const { data: reviewsData } = await supabase
@@ -56,12 +63,12 @@ export default function EventPage({ params }: { params: { id: string } }) {
       .order('created_at', { ascending: false })
     if (reviewsData) {
       setReviews(reviewsData)
-      setMyReview(reviewsData.find((r: any) => r.reviewer_id === userId) || null)
+      if (userId) setMyReview(reviewsData.find((r: any) => r.reviewer_id === userId) || null)
     }
   }
 
   const toggleJoin = async () => {
-    if (!user) return
+    if (!user) { window.location.href = '/login'; return }
     setLoading(true)
     if (joined) {
       await supabase.from('event_attendees').delete().eq('event_id', params.id).eq('user_id', user.id)
@@ -105,12 +112,23 @@ export default function EventPage({ params }: { params: { id: string } }) {
     setSavingReview(false)
   }
 
+  const shareEvent = async () => {
+    const url = window.location.href
+    if (navigator.share) {
+      await navigator.share({ title: event.title, url })
+    } else {
+      await navigator.clipboard.writeText(url)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    }
+  }
+
   const categoryColor: Record<string, string> = {
     Sport: '#185FA5', Food: '#D85A30', Culture: '#BA7517',
     Outdoor: '#1D9E75', Music: '#534AB7'
   }
 
-  if (!event) return (
+  if (!authChecked || !event) return (
     <main style={{padding:'32px 24px', textAlign:'center', color:'var(--text-3)'}}>
       Loading...
     </main>
@@ -137,9 +155,26 @@ export default function EventPage({ params }: { params: { id: string } }) {
       fontFamily: 'sans-serif',
     }}>
 
-      <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
-        ← Back to events
-      </a>
+      {user ? (
+        <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
+          ← Back to events
+        </a>
+      ) : (
+        <a href="/" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'14px', display:'inline-flex', alignItems:'center', gap:'6px', marginBottom:'20px'}}>
+          ← Friends Without Benefits
+        </a>
+      )}
+
+      {/* COVER IMAGE */}
+      {event.cover_url && (
+        <div style={{borderRadius:'var(--radius)', overflow:'hidden', marginBottom:'16px', boxShadow:'var(--shadow)'}}>
+          <img
+            src={event.cover_url}
+            style={{width:'100%', height:'220px', objectFit:'cover', display:'block'}}
+            alt={event.title}
+          />
+        </div>
+      )}
 
       <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)', marginBottom:'16px'}}>
 
@@ -249,7 +284,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
               />
             </div>
 
-            {!isPast && (
+            {/* BOTTONE JOIN / SIGNUP */}
+            {!user ? (
+              <a 
+                href="/login"
+                style={{display:'block', width:'100%', padding:'14px', background:'var(--green)', color:'white', borderRadius:'100px', fontSize:'16px', fontWeight:'700', textAlign:'center', textDecoration:'none', marginBottom:'10px', boxShadow:'0 2px 8px rgba(29,158,117,0.3)', boxSizing:'border-box'}}
+              >
+                Sign up to join this event →
+              </a>
+            ) : !isPast ? (
               <button
                 onMouseDown={toggleJoin}
                 disabled={loading || (!joined && spots === 0) || isCreator}
@@ -257,7 +300,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
               >
                 {isCreator ? '👑 You created this event' : loading ? '...' : joined ? '✓ You are going!' : spots === 0 ? 'Event is full' : 'Join this event →'}
               </button>
-            )}
+            ) : null}
 
             {isPast && joined && !isCreator && (
               <button
@@ -297,12 +340,23 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </div>
             )}
 
-            <a 
-              href={`/events/${params.id}/chat`}
-              style={{display:'block', width:'100%', padding:'14px', background:'var(--bg)', color:'var(--text)', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer', textAlign:'center', textDecoration:'none', border:'1px solid var(--border)', boxSizing:'border-box'}}
-            >
-              💬 Open chat
-            </a>
+            {/* BOTTONI CHAT E SHARE */}
+            <div style={{display:'flex', gap:'10px'}}>
+              {user && (
+                <a 
+                  href={`/events/${params.id}/chat`}
+                  style={{flex:1, display:'block', padding:'14px', background:'var(--bg)', color:'var(--text)', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer', textAlign:'center', textDecoration:'none', border:'1px solid var(--border)', boxSizing:'border-box'}}
+                >
+                  💬 Chat
+                </a>
+              )}
+              <button
+                onMouseDown={shareEvent}
+                style={{flex:1, padding:'14px', background:'var(--bg)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer'}}
+              >
+                {shareCopied ? '✓ Copied!' : '🔗 Share'}
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -312,47 +366,76 @@ export default function EventPage({ params }: { params: { id: string } }) {
         <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>
           {"Who's going"} ({displayAttendees.length})
         </h2>
-        <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-          {displayAttendees.map((a: any, i: number) => {
-            const profile = a.profiles
-            const name = profile?.display_name || 'Anonymous'
-            const initial = name[0]?.toUpperCase() || '?'
-            const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
-            const bg = colors[i % colors.length]
-            return (
-              <div
-                key={a.user_id}
-                onMouseDown={() => window.location.href = `/users/${a.user_id}`}
-                style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border: a.isHost ? '1.5px solid var(--green)' : '1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer', background: a.isHost ? 'var(--green-light)' : 'white'}}
-              >
-                <div style={{width:'44px', height:'44px', borderRadius:'50%', overflow:'hidden', flexShrink:0, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', color:'#333'}}>
-                  {profile?.avatar_url
-                    ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
-                    : initial}
-                </div>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px', flexWrap:'wrap'}}>
-                    <span style={{fontSize:'14px', fontWeight:'600'}}>{name}</span>
-                    {a.isHost && (
-                      <span style={{fontSize:'10px', fontWeight:'700', color:'var(--green-dark)', background:'var(--green-mid)', padding:'2px 7px', borderRadius:'100px'}}>HOST</span>
+
+        {!user ? (
+          <div style={{position:'relative'}}>
+            <div style={{filter:'blur(4px)', pointerEvents:'none', userSelect:'none'}}>
+              {displayAttendees.slice(0, 3).map((a: any, i: number) => {
+                const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4']
+                const bg = colors[i % colors.length]
+                return (
+                  <div key={i} style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', marginBottom:'10px', background:'white'}}>
+                    <div style={{width:'44px', height:'44px', borderRadius:'50%', background:bg, flexShrink:0}} />
+                    <div style={{flex:1}}>
+                      <div style={{height:'12px', background:'var(--border)', borderRadius:'6px', width:'60%', marginBottom:'6px'}} />
+                      <div style={{height:'10px', background:'var(--border)', borderRadius:'6px', width:'40%'}} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.7)', borderRadius:'var(--radius-sm)'}}>
+              <p style={{fontSize:'14px', fontWeight:'600', color:'var(--text)', marginBottom:'12px', textAlign:'center'}}>
+                Sign up to see who is going
+              </p>
+              <a href="/login" style={{padding:'10px 24px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}>
+                Join for free →
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+            {displayAttendees.map((a: any, i: number) => {
+              const profile = a.profiles
+              const name = profile?.display_name || 'Anonymous'
+              const initial = name[0]?.toUpperCase() || '?'
+              const colors = ['#9FE1CB', '#F5C4B3', '#B5D4F4', '#CECBF6', '#FAC775']
+              const bg = colors[i % colors.length]
+              return (
+                <div
+                  key={a.user_id}
+                  onMouseDown={() => window.location.href = `/users/${a.user_id}`}
+                  style={{display:'flex', alignItems:'center', gap:'12px', padding:'12px', border: a.isHost ? '1.5px solid var(--green)' : '1px solid var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer', background: a.isHost ? 'var(--green-light)' : 'white'}}
+                >
+                  <div style={{width:'44px', height:'44px', borderRadius:'50%', overflow:'hidden', flexShrink:0, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', color:'#333'}}>
+                    {profile?.avatar_url
+                      ? <img src={profile.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt={name} />
+                      : initial}
+                  </div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'2px', flexWrap:'wrap'}}>
+                      <span style={{fontSize:'14px', fontWeight:'600'}}>{name}</span>
+                      {a.isHost && (
+                        <span style={{fontSize:'10px', fontWeight:'700', color:'var(--green-dark)', background:'var(--green-mid)', padding:'2px 7px', borderRadius:'100px'}}>HOST</span>
+                      )}
+                    </div>
+                    {profile?.location && <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>}
+                    {profile?.interests?.length > 0 && (
+                      <div style={{display:'flex', gap:'4px', marginTop:'4px', flexWrap:'wrap'}}>
+                        {profile.interests.slice(0, 3).map((interest: string) => (
+                          <span key={interest} style={{fontSize:'11px', padding:'2px 8px', background:'white', borderRadius:'100px', color:'var(--text-2)', border:'1px solid var(--border)'}}>
+                            {interest}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {profile?.location && <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>}
-                  {profile?.interests?.length > 0 && (
-                    <div style={{display:'flex', gap:'4px', marginTop:'4px', flexWrap:'wrap'}}>
-                      {profile.interests.slice(0, 3).map((interest: string) => (
-                        <span key={interest} style={{fontSize:'11px', padding:'2px 8px', background:'white', borderRadius:'100px', color:'var(--text-2)', border:'1px solid var(--border)'}}>
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <span style={{fontSize:'18px', color: a.isHost ? 'var(--green)' : 'var(--text-3)', flexShrink:0}}>→</span>
                 </div>
-                <span style={{fontSize:'18px', color: a.isHost ? 'var(--green)' : 'var(--text-3)', flexShrink:0}}>→</span>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* REVIEWS */}
@@ -383,6 +466,25 @@ export default function EventPage({ params }: { params: { id: string } }) {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* BANNER SIGNUP per utenti non loggati */}
+      {!user && (
+        <div style={{background:'#0D1F1A', borderRadius:'var(--radius)', padding:'28px 24px', textAlign:'center', marginTop:'16px'}}>
+          <div style={{fontSize:'32px', marginBottom:'12px'}}>🌍</div>
+          <h2 style={{fontSize:'20px', fontWeight:'800', fontFamily:'Syne, sans-serif', color:'white', marginBottom:'8px'}}>
+            Meet people, not screens
+          </h2>
+          <p style={{fontSize:'14px', color:'rgba(255,255,255,0.6)', marginBottom:'20px', lineHeight:'1.6'}}>
+            Join Friends Without Benefits for free and start attending real-life experiences.
+          </p>
+          <a 
+            href="/login"
+            style={{display:'inline-block', padding:'14px 28px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'15px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}
+          >
+            Join for free →
+          </a>
         </div>
       )}
 

@@ -19,9 +19,14 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [darkMode, setDarkMode] = useState(false)
   const isNew = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true'
 
   useEffect(() => {
+    // Carica tema salvato
+    const saved = localStorage.getItem('fwb-theme')
+    setDarkMode(saved === 'dark')
+
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { window.location.href = '/login'; return }
       setUser(data.user)
@@ -37,6 +42,13 @@ export default function ProfilePage() {
       })
     })
   }, [])
+
+  const toggleDarkMode = () => {
+    const next = !darkMode
+    setDarkMode(next)
+    localStorage.setItem('fwb-theme', next ? 'dark' : 'light')
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : '')
+  }
 
   const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -79,11 +91,17 @@ export default function ProfilePage() {
   }
 
   return (
-    <main style={{padding:'24px 20px', maxWidth:'600px', margin:'0 auto', fontFamily:'sans-serif'}}>
+    <main style={{
+      padding:'24px 20px',
+      paddingBottom:'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth:'600px',
+      margin:'0 auto',
+      fontFamily:'sans-serif',
+    }}>
 
       <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'24px'}}>
         {!isNew && <a href="/explore" style={{color:'var(--text-3)', textDecoration:'none', fontSize:'20px'}}>←</a>}
-        <div>
+        <div style={{flex:1}}>
           <h1 style={{fontSize:'26px', fontWeight:'800', fontFamily:'Syne, sans-serif', letterSpacing:'-0.5px', marginBottom:'2px'}}>
             {isNew ? 'Complete your profile' : 'My Profile'}
           </h1>
@@ -197,7 +215,7 @@ export default function ProfilePage() {
         </div>
 
         {/* SHOW ATTENDED */}
-        <div style={{marginBottom:'24px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--bg)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)'}}>
+        <div style={{marginBottom:'16px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--bg)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)'}}>
           <div>
             <div style={{fontSize:'14px', fontWeight:'600', marginBottom:'2px'}}>Show activities attended</div>
             <div style={{fontSize:'12px', color:'var(--text-3)'}}>Others can see events you have joined</div>
@@ -207,6 +225,22 @@ export default function ProfilePage() {
             style={{width:'44px', height:'24px', borderRadius:'100px', background: profile.show_attended ? 'var(--green)' : '#ddd', cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0}}
           >
             <div style={{width:'20px', height:'20px', borderRadius:'50%', background:'white', position:'absolute', top:'2px', left: profile.show_attended ? '22px' : '2px', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}} />
+          </div>
+        </div>
+
+        {/* DARK MODE */}
+        <div style={{marginBottom:'24px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--bg)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border)'}}>
+          <div>
+            <div style={{fontSize:'14px', fontWeight:'600', marginBottom:'2px'}}>
+              {darkMode ? '🌙 Dark mode' : '☀️ Light mode'}
+            </div>
+            <div style={{fontSize:'12px', color:'var(--text-3)'}}>Switch between light and dark theme</div>
+          </div>
+          <div
+            onMouseDown={toggleDarkMode}
+            style={{width:'44px', height:'24px', borderRadius:'100px', background: darkMode ? 'var(--green)' : '#ddd', cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0}}
+          >
+            <div style={{width:'20px', height:'20px', borderRadius:'50%', background:'white', position:'absolute', top:'2px', left: darkMode ? '22px' : '2px', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}} />
           </div>
         </div>
 

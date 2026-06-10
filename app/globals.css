@@ -95,3 +95,83 @@ main {
     min-height: 44px;
   }
 }
+
+/* ============================================
+   ANIMAZIONI
+   ============================================ */
+
+/* Fade-in di ogni pagina */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+main {
+  animation: fadeIn 0.25s ease-out both;
+}
+
+/* Transizione sui link della navbar */
+nav a {
+  transition: color 0.15s, transform 0.1s;
+}
+
+nav a:active {
+  transform: scale(0.92);
+}
+
+/* Bottoni con hover più fluido */
+button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+/* ============================================
+   DARK MODE
+   ============================================ */
+
+   [data-theme="dark"] {
+    --green: #1D9E75;
+    --green-light: #0D3D2E;
+    --green-dark: #9FE1CB;
+    --green-mid: #1A5C46;
+    --bg: #0F1410;
+    --surface: #1A1F1C;
+    --border: rgba(255,255,255,0.08);
+    --text: #F0F0EC;
+    --text-2: #A8A89E;
+    --text-3: #6B6B62;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2);
+  }
+  
+  [data-theme="dark"] body {
+    background: #0F1410;
+  }
+  
+  [data-theme="dark"] input,
+  [data-theme="dark"] textarea,
+  [data-theme="dark"] select {
+    background: #1A1F1C;
+    color: #F0F0EC;
+    border-color: rgba(255,255,255,0.1);
+  }
+  
+  [data-theme="dark"] input:focus,
+  [data-theme="dark"] textarea:focus,
+  [data-theme="dark"] select:focus {
+    background: #242924;
+    border-color: var(--green);
+  }

@@ -22,7 +22,7 @@ export default function LandingPage() {
       {/* HERO */}
       <div style={{maxWidth:'720px', margin:'0 auto', padding:'80px 32px 60px', textAlign:'center'}}>
         <div style={{display:'inline-block', background:'rgba(29,158,117,0.2)', border:'1px solid rgba(29,158,117,0.4)', color:'#9FE1CB', fontSize:'12px', fontWeight:'600', padding:'6px 14px', borderRadius:'100px', marginBottom:'28px', letterSpacing:'0.04em'}}>
-          🌍 Now available in Sydney
+          🌍 Connect with people around you
         </div>
         <h1 style={{fontSize:'clamp(40px, 7vw, 72px)', fontWeight:'800', lineHeight:'1.05', letterSpacing:'-2px', marginBottom:'24px'}}>
           Meet people,<br/>
@@ -44,10 +44,10 @@ export default function LandingPage() {
       {/* EXAMPLE EVENTS */}
       <div style={{maxWidth:'900px', margin:'0 auto', padding:'0 32px 60px', display:'flex', gap:'16px', overflowX:'auto', scrollbarWidth:'none'}}>
         {[
-          { emoji:'🏄', title:'Surf at Bondi — open to all', category:'Sport', time:'Today · 4:00–6:00 PM', location:'Bondi Beach', spots:4 },
-          { emoji:'🍜', title:'Thai dinner in Surry Hills', category:'Food', time:'Tonight · 7:30 PM', location:'Chat Thai', spots:3 },
-          { emoji:'🍹', title:'Rooftop aperitivo', category:'Partner', time:'Tonight · 6:30 PM', location:'The Glenmore', spots:12 },
-          { emoji:'🖼️', title:'MCA exhibition + coffee', category:'Culture', time:'Tomorrow · 11:00 AM', location:'Museum of CA', spots:5 },
+          { emoji:'🏄', title:'Morning surf session', category:'Sport', time:'Today · 7:00–9:00 AM', location:'Local beach', spots:4 },
+          { emoji:'🍜', title:'Ramen dinner downtown', category:'Food', time:'Tonight · 7:30 PM', location:'City center', spots:3 },
+          { emoji:'🍹', title:'Rooftop aperitivo', category:'Culture', time:'Tonight · 6:30 PM', location:'Rooftop bar', spots:12 },
+          { emoji:'🖼️', title:'Art exhibition + coffee', category:'Culture', time:'Tomorrow · 11:00 AM', location:'Local museum', spots:5 },
         ].map((event, i) => (
           <div key={i} style={{flexShrink:0, width:'240px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'16px', padding:'20px', backdropFilter:'blur(10px)'}}>
             <div style={{fontSize:'11px', fontWeight:'600', color:'#9FE1CB', marginBottom:'10px', textTransform:'uppercase', letterSpacing:'0.04em'}}>{event.category}</div>

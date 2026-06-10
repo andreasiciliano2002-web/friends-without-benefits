@@ -76,17 +76,22 @@ export default function GroupsPage() {
   const displayGroups = tab === 'mine' ? myGroups : discoverGroups
 
   return (
-    <main style={{padding:'24px 20px', maxWidth:'900px', margin:'0 auto'}}>
+    <main style={{
+      padding:'24px 20px',
+      paddingBottom:'calc(80px + env(safe-area-inset-bottom))',
+      maxWidth:'900px',
+      margin:'0 auto',
+    }}>
 
       {/* HEADER */}
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', gap:'12px'}}>
         <div>
           <h1 style={{fontSize:'26px', fontWeight:'800', fontFamily:'Syne, sans-serif', letterSpacing:'-0.5px', marginBottom:'2px'}}>Groups</h1>
           <p style={{fontSize:'13px', color:'var(--text-3)'}}>Find your community</p>
         </div>
         <button
           onMouseDown={() => setShowCreate(!showCreate)}
-          style={{padding:'10px 18px', background:'var(--green)', color:'white', border:'none', borderRadius:'100px', fontWeight:'600', fontSize:'14px', cursor:'pointer', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}
+          style={{padding:'10px 18px', background: showCreate ? 'var(--bg)' : 'var(--green)', color: showCreate ? 'var(--text-2)' : 'white', border: showCreate ? '1px solid var(--border)' : 'none', borderRadius:'100px', fontWeight:'600', fontSize:'14px', cursor:'pointer', boxShadow: showCreate ? 'none' : '0 2px 8px rgba(29,158,117,0.3)', flexShrink:0}}
         >
           {showCreate ? '✕ Cancel' : '+ Create'}
         </button>
@@ -137,7 +142,7 @@ export default function GroupsPage() {
               background: tab === t ? 'var(--green)' : 'transparent',
               color: tab === t ? 'white' : 'var(--text-3)',
               fontWeight: tab === t ? '600' : '400',
-              fontSize:'13px', cursor:'pointer',
+              fontSize:'13px', cursor:'pointer', minHeight:'auto',
               boxShadow: tab === t ? '0 2px 8px rgba(29,158,117,0.3)' : 'none'
             }}
           >
@@ -148,12 +153,20 @@ export default function GroupsPage() {
 
       {/* GROUPS GRID */}
       {displayGroups.length === 0 ? (
-        <div style={{textAlign:'center', padding:'60px 20px', color:'var(--text-3)'}}>
-          <div style={{fontSize:'48px', marginBottom:'16px'}}>{tab === 'mine' ? '👥' : '🔍'}</div>
-          <h2 style={{fontSize:'20px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'8px'}}>
+        <div style={{textAlign:'center', padding:'60px 20px', color:'var(--text-3)', maxWidth:'320px', margin:'0 auto'}}>
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{margin:'0 auto 24px', display:'block'}}>
+            <circle cx="60" cy="60" r="60" fill="#E1F5EE"/>
+            <circle cx="45" cy="45" r="13" fill="#9FE1CB"/>
+            <circle cx="75" cy="45" r="13" fill="#B5D4F4"/>
+            <path d="M20 92c0-13.807 11.193-25 25-25s25 11.193 25 25" stroke="#1D9E75" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            <path d="M50 92c0-13.807 11.193-25 25-25s25 11.193 25 25" stroke="#534AB7" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          </svg>
+          <h2 style={{fontSize:'20px', fontWeight:'800', marginBottom:'8px', fontFamily:'Syne, sans-serif', color:'var(--text)'}}>
             {tab === 'mine' ? 'No groups yet' : 'No groups to discover'}
           </h2>
-          <p style={{fontSize:'14px'}}>{tab === 'mine' ? 'Join a group or create one!' : 'Be the first to create a group!'}</p>
+          <p style={{fontSize:'14px', lineHeight:'1.6'}}>
+            {tab === 'mine' ? 'Join a group or create your own community!' : 'Be the first to create a group!'}
+          </p>
         </div>
       ) : (
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:'14px'}}>
@@ -179,8 +192,8 @@ export default function GroupsPage() {
                     {group.description}
                   </p>
                 )}
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)'}}>
-                  <span style={{fontSize:'13px', color:'var(--text-3)'}}>👥 {count} members</span>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'12px', borderTop:'1px solid var(--border)', gap:'8px'}}>
+                  <span style={{fontSize:'13px', color:'var(--text-3)', flexShrink:0}}>👥 {count} members</span>
                   <button
                     onMouseDown={(e) => toggleJoin(group.id, e)}
                     disabled={isLoading}
@@ -190,7 +203,8 @@ export default function GroupsPage() {
                       color: isJoined ? 'var(--green-dark)' : 'white',
                       border:'none', borderRadius:'100px',
                       fontSize:'13px', fontWeight:'600', cursor:'pointer',
-                      boxShadow: isJoined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)'
+                      boxShadow: isJoined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)',
+                      minHeight:'auto', flexShrink:0,
                     }}
                   >
                     {isLoading ? '...' : isJoined ? '✓ Joined' : 'Join'}
