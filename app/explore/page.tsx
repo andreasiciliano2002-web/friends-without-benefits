@@ -3,11 +3,29 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr + 'T00:00:00')
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const getMoodLabel = (mood: string) => {
+  switch (mood) {
+    case 'energetic': return '🔥 Energetic'
+    case 'chill': return '🧘 Chill'
+    case 'party': return '🎉 Party'
+    case 'social': return '💬 Social'
+    default: return ''
+  }
+}
+
+
 export default function ExplorePage() {
   const [events, setEvents] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [userGender, setUserGender] = useState<string | null>(null)
+  const [userInterests, setUserInterests] = useState<string[]>([])
   const [attendees, setAttendees] = useState<Record<string, string[]>>({})
+  const [attendeeInterests, setAttendeeInterests] = useState<Record<string, string[][]>>({})
   const [loadingJoin, setLoadingJoin] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
@@ -26,15 +44,16 @@ export default function ExplorePage() {
   const loadUserAndEvents = async (userId: string) => {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('gender')
+      .select('gender, interests')
       .eq('id', userId)
       .single()
     const gender = profile?.gender || null
     setUserGender(gender)
-    loadEvents(gender)
+    setUserInterests(profile?.interests || [])
+    loadEvents(gender, profile?.interests || [])
   }
 
-  const loadEvents = async (gender: string | null) => {
+  const loadEvents = async (gender: string | null, myInterests: string[]) => {
     const today = new Date().toISOString().split('T')[0]
     const { data: eventsData } = await supabase
       .from('events')
@@ -53,16 +72,28 @@ export default function ExplorePage() {
 
       const { data: attendeesData } = await supabase
         .from('event_attendees')
-        .select('event_id, user_id')
+        .select('event_id, user_id, profiles(interests)')
       if (attendeesData) {
         const map: Record<string, string[]> = {}
-        attendeesData.forEach(a => {
+        const interestsMap: Record<string, string[][]> = {}
+        attendeesData.forEach((a: any) => {
           if (!map[a.event_id]) map[a.event_id] = []
           map[a.event_id].push(a.user_id)
+          if (!interestsMap[a.event_id]) interestsMap[a.event_id] = []
+          if (a.profiles?.interests) interestsMap[a.event_id].push(a.profiles.interests)
         })
         setAttendees(map)
+        setAttendeeInterests(interestsMap)
       }
     }
+  }
+
+  const getVibeMatch = (eventId: string) => {
+    if (!userInterests.length) return 0
+    const allAttendeeInterests = attendeeInterests[eventId] || []
+    return allAttendeeInterests.filter(interests =>
+      interests.some(i => userInterests.includes(i))
+    ).length
   }
 
   const toggleJoin = async (eventId: string, e: React.MouseEvent) => {
@@ -89,7 +120,7 @@ export default function ExplorePage() {
     } else {
       await supabase.from('event_attendees').insert({ event_id: eventId, user_id: user.id })
     }
-    await loadEvents(userGender)
+    await loadEvents(userGender, userInterests)
     setLoadingJoin(null)
   }
 
@@ -112,6 +143,7 @@ export default function ExplorePage() {
 
   const dateFilters = [
     { value: 'all', label: '📅 Any time' },
+    { value: 'last-minute', label: '⚡ Last minute' },
     { value: 'today', label: '☀️ Today' },
     { value: 'weekend', label: '🎉 Weekend' },
     { value: 'week', label: '📆 This week' },
@@ -140,6 +172,12 @@ export default function ExplorePage() {
     .filter(e => filter === 'all' || e.category === filter)
     .filter(e => {
       if (dateFilter === 'all') return true
+      if (dateFilter === 'last-minute') {
+        const now = new Date()
+        const eventDate = new Date(`${e.date}T${e.time || '23:59'}`)
+        const diffHours = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+        return diffHours >= 0 && diffHours <= 3
+      }
       if (dateFilter === 'today') return e.date === today
       if (dateFilter === 'weekend') return e.date === satStr || e.date === sunStr
       if (dateFilter === 'week') return e.date >= today && e.date <= endOfWeekStr
@@ -163,7 +201,6 @@ export default function ExplorePage() {
       margin: '0 auto',
     }}>
 
-      {/* HEADER */}
       <div style={{marginBottom:'20px'}}>
         <h1 style={{fontSize:'26px', fontWeight:'800', fontFamily:'Syne, sans-serif', letterSpacing:'-0.5px', marginBottom:'2px'}}>
           Friends Without Benefits
@@ -171,7 +208,6 @@ export default function ExplorePage() {
         <p style={{fontSize:'13px', color:'var(--text-3)'}}>🌍 {filteredEvents.length} upcoming events near you</p>
       </div>
 
-      {/* SEARCH BAR */}
       <div style={{position:'relative', marginBottom:'16px'}}>
         <input
           value={search}
@@ -179,20 +215,12 @@ export default function ExplorePage() {
           placeholder="Search events, places..."
           style={{paddingLeft:'40px', background:'white'}}
         />
-        <span style={{position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', pointerEvents:'none'}}>
-          🔍
-        </span>
+        <span style={{position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', pointerEvents:'none'}}>🔍</span>
         {search && (
-          <span
-            onMouseDown={() => setSearch('')}
-            style={{position:'absolute', right:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', cursor:'pointer', color:'var(--text-3)'}}
-          >
-            ✕
-          </span>
+          <span onMouseDown={() => setSearch('')} style={{position:'absolute', right:'14px', top:'50%', transform:'translateY(-50%)', fontSize:'16px', cursor:'pointer', color:'var(--text-3)'}}>✕</span>
         )}
       </div>
 
-      {/* CATEGORY FILTERS */}
       <div style={{display:'flex', gap:'8px', marginBottom:'10px', overflowX:'auto', paddingBottom:'4px'}}>
         {filters.map(f => (
           <button
@@ -214,7 +242,6 @@ export default function ExplorePage() {
         ))}
       </div>
 
-      {/* DATE FILTERS */}
       <div style={{display:'flex', gap:'8px', marginBottom:'20px', overflowX:'auto', paddingBottom:'4px'}}>
         {dateFilters.map(f => (
           <button
@@ -236,7 +263,6 @@ export default function ExplorePage() {
         ))}
       </div>
 
-      {/* EVENTS */}
       {filteredEvents.length === 0 ? (
         <div style={{textAlign:'center', padding:'60px 20px', color:'var(--text-3)', maxWidth:'320px', margin:'0 auto'}}>
           <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{margin:'0 auto 24px', display:'block'}}>
@@ -268,6 +294,7 @@ export default function ExplorePage() {
             const cfg = categoryConfig[event.category] || { color:'var(--green)', bg:'var(--green-light)', icon:'🌍' }
             const isLoading = loadingJoin === event.id
             const creatorName = event.profiles?.display_name || null
+            const vibeMatch = getVibeMatch(event.id)
 
             return (
               <div
@@ -292,11 +319,7 @@ export default function ExplorePage() {
                 }}
               >
                 {event.cover_url && (
-                  <img
-                    src={event.cover_url}
-                    style={{width:'100%', height:'140px', objectFit:'cover', display:'block'}}
-                    alt={event.title}
-                  />
+                  <img src={event.cover_url} style={{width:'100%', height:'140px', objectFit:'cover', display:'block'}} alt={event.title} />
                 )}
 
                 <div style={{padding:'18px'}}>
@@ -313,6 +336,21 @@ export default function ExplorePage() {
                           {event.gender_filter === 'women' ? '👩 Women' : '👨 Men'}
                         </span>
                       )}
+                      {event.mood && (
+                        <span style={{fontSize:'11px', fontWeight:'600', color:'#C04A20', background:'#FAECE7', padding:'3px 10px', borderRadius:'100px'}}>
+                          {getMoodLabel(event.mood)}
+                        </span>
+                      )}
+                      {event.recurrence && (
+  <span style={{fontSize:'11px', fontWeight:'600', color:'#185FA5', background:'#E6F1FB', padding:'3px 10px', borderRadius:'100px'}}>
+    {event.recurrence === 'weekly' ? '📅 Weekly' : '🗓️ Monthly'}
+  </span>
+)}
+                      {vibeMatch > 0 && userInterests.length > 0 && !joined && (
+                        <span style={{fontSize:'11px', fontWeight:'600', color:'#7C3AED', background:'#EDE9FE', padding:'3px 10px', borderRadius:'100px'}}>
+                          ✨ {vibeMatch} {vibeMatch === 1 ? 'person' : 'people'} like you
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -327,7 +365,7 @@ export default function ExplorePage() {
                   )}
 
                   <div style={{display:'flex', flexDirection:'column', gap:'4px', marginBottom:'14px'}}>
-                    <span style={{fontSize:'13px', color:'var(--text-2)'}}>📅 {event.date} {event.time && `· ${event.time}`}</span>
+                    <span style={{fontSize:'13px', color:'var(--text-2)'}}>📅 {formatDate(event.date)} {event.time && `· ${event.time}`}</span>
                     <span style={{fontSize:'13px', color:'var(--text-2)'}}>📍 {event.location}</span>
                   </div>
 

@@ -11,6 +11,11 @@ const CATEGORY_CONFIG: Record<string, { icon: string; bg: string; color: string 
   Music:   { icon: '🎵', bg: '#EEEDFE', color: '#534AB7' },
 }
 
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr + 'T00:00:00')
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function MyEventsPage() {
   const [user, setUser] = useState<any>(null)
   const [myEvents, setMyEvents] = useState<any[]>([])
@@ -23,13 +28,12 @@ export default function MyEventsPage() {
   const [form, setForm] = useState({
     title: '', description: '', category: 'Sport',
     date: '', time: '', location: '',
-    max_attendees: 10, event_type: 'open', gender_filter: 'everyone'
+    max_attendees: 10, event_type: 'open', gender_filter: 'everyone', mood: '', recurrence: ''
   })
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
-  // Autocomplete state
   const [locationQuery, setLocationQuery] = useState('')
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -124,7 +128,6 @@ export default function MyEventsPage() {
 
     let cover_url = null
 
-    // Upload cover se presente
     if (coverFile && user) {
       const ext = coverFile.name.split('.').pop()
       const path = `${user.id}/${Date.now()}.${ext}`
@@ -148,7 +151,7 @@ export default function MyEventsPage() {
     if (error) setMessage('Error: ' + error.message)
     else {
       setShowCreate(false)
-      setForm({ title: '', description: '', category: 'Sport', date: '', time: '', location: '', max_attendees: 10, event_type: 'open', gender_filter: 'everyone' })
+      setForm({ title: '', description: '', category: 'Sport', date: '', time: '', location: '', max_attendees: 10, event_type: 'open', gender_filter: 'everyone', mood: '', recurrence: '' })
       setLocationQuery('')
       setCoverFile(null)
       setCoverPreview(null)
@@ -202,16 +205,12 @@ export default function MyEventsPage() {
             <div
               onMouseDown={() => coverInputRef.current?.click()}
               style={{
-                width:'100%',
-                height:'160px',
+                width:'100%', height:'160px',
                 borderRadius:'var(--radius-sm)',
                 border:`2px dashed ${coverPreview ? 'var(--green)' : 'var(--border)'}`,
                 background: coverPreview ? 'transparent' : 'var(--bg)',
-                cursor:'pointer',
-                overflow:'hidden',
-                display:'flex',
-                alignItems:'center',
-                justifyContent:'center',
+                cursor:'pointer', overflow:'hidden',
+                display:'flex', alignItems:'center', justifyContent:'center',
                 position:'relative',
               }}
             >
@@ -230,15 +229,10 @@ export default function MyEventsPage() {
                 </div>
               )}
             </div>
-            <input
-              ref={coverInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleCoverChange}
-              style={{display:'none'}}
-            />
+            <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverChange} style={{display:'none'}} />
           </div>
 
+          {/* EVENT TYPE */}
           <div style={{marginBottom:'16px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'8px', color:'var(--text-2)'}}>Event type</p>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
@@ -251,6 +245,7 @@ export default function MyEventsPage() {
             </div>
           </div>
 
+          {/* WHO CAN JOIN */}
           <div style={{marginBottom:'16px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'8px', color:'var(--text-2)'}}>Who can join</p>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}}>
@@ -263,11 +258,56 @@ export default function MyEventsPage() {
             </div>
           </div>
 
+          {/* MOOD */}
+          <div style={{marginBottom:'16px'}}>
+            <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'8px', color:'var(--text-2)'}}>Vibe of the event</p>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+              {[
+                {value:'energetic', label:'Energetic', icon:'🔥'},
+                {value:'chill', label:'Chill', icon:'🧘'},
+                {value:'party', label:'Party', icon:'🎉'},
+                {value:'social', label:'Social', icon:'💬'},
+              ].map(opt => (
+                <div
+                  key={opt.value}
+                  onMouseDown={() => update('mood', form.mood === opt.value ? '' : opt.value)}
+                  style={{padding:'12px', border:`2px solid ${form.mood === opt.value ? 'var(--green)' : 'var(--border)'}`, background: form.mood === opt.value ? 'var(--green-light)' : 'white', borderRadius:'var(--radius-sm)', cursor:'pointer', textAlign:'center'}}
+                >
+                  <div style={{fontSize:'20px', marginBottom:'4px'}}>{opt.icon}</div>
+                  <div style={{fontSize:'12px', fontWeight:'600', color: form.mood === opt.value ? 'var(--green-dark)' : 'var(--text-2)'}}>{opt.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* RECURRENCE */}
+          <div style={{marginBottom:'16px'}}>
+            <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'8px', color:'var(--text-2)'}}>Recurring event</p>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}}>
+              {[
+                {value:'', label:'One time', icon:'1️⃣'},
+                {value:'weekly', label:'Weekly', icon:'📅'},
+                {value:'monthly', label:'Monthly', icon:'🗓️'},
+              ].map(opt => (
+                <div
+                  key={opt.value}
+                  onMouseDown={() => update('recurrence', opt.value)}
+                  style={{padding:'12px 8px', border:`2px solid ${form.recurrence === opt.value ? 'var(--green)' : 'var(--border)'}`, background: form.recurrence === opt.value ? 'var(--green-light)' : 'white', borderRadius:'var(--radius-sm)', cursor:'pointer', textAlign:'center'}}
+                >
+                  <div style={{fontSize:'20px', marginBottom:'4px'}}>{opt.icon}</div>
+                  <div style={{fontSize:'12px', fontWeight:'600', color: form.recurrence === opt.value ? 'var(--green-dark)' : 'var(--text-2)'}}>{opt.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TITLE */}
           <div style={{marginBottom:'16px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>Title *</p>
             <input value={form.title} onChange={e => update('title', e.target.value)} placeholder="e.g. Surf at Bondi..." />
           </div>
 
+          {/* CATEGORY */}
           <div style={{marginBottom:'16px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>Category</p>
             <select value={form.category} onChange={e => update('category', e.target.value)}>
@@ -279,6 +319,7 @@ export default function MyEventsPage() {
             </select>
           </div>
 
+          {/* DATE & TIME */}
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px', marginBottom:'16px'}}>
             <div>
               <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>Date *</p>
@@ -290,7 +331,7 @@ export default function MyEventsPage() {
             </div>
           </div>
 
-          {/* LOCATION CON AUTOCOMPLETE */}
+          {/* LOCATION */}
           <div style={{marginBottom:'16px', position:'relative'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>
               Location * <span style={{fontWeight:'400', color:'var(--text-3)'}}>— start typing to search</span>
@@ -335,11 +376,13 @@ export default function MyEventsPage() {
             )}
           </div>
 
+          {/* SPOTS */}
           <div style={{marginBottom:'16px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>Available spots</p>
             <input type="number" value={form.max_attendees} onChange={e => update('max_attendees', parseInt(e.target.value))} min={2} max={100} />
           </div>
 
+          {/* DESCRIPTION */}
           <div style={{marginBottom:'20px'}}>
             <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px', color:'var(--text-2)'}}>Description</p>
             <textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Tell people what to expect..." rows={3} style={{resize:'none'}} />
@@ -389,9 +432,19 @@ export default function MyEventsPage() {
                           <div style={{display:'flex', gap:'6px', marginBottom:'6px', flexWrap:'wrap', alignItems:'center'}}>
                             <span style={{fontSize:'11px', fontWeight:'700', color: cfg.color, textTransform:'uppercase', letterSpacing:'0.04em'}}>{event.category}</span>
                             {past && <span style={{fontSize:'11px', color:'var(--text-3)', background:'var(--bg)', padding:'1px 8px', borderRadius:'100px'}}>Past</span>}
+                            {event.mood && (
+                              <span style={{fontSize:'11px', color:'#C04A20', background:'#FAECE7', padding:'1px 8px', borderRadius:'100px'}}>
+                                {event.mood === 'energetic' ? '🔥' : event.mood === 'chill' ? '🧘' : event.mood === 'party' ? '🎉' : '💬'}
+                              </span>
+                            )}
+                            {event.recurrence && (
+                              <span style={{fontSize:'11px', color:'#185FA5', background:'#E6F1FB', padding:'1px 8px', borderRadius:'100px'}}>
+                                {event.recurrence === 'weekly' ? '📅 Weekly' : '🗓️ Monthly'}
+                              </span>
+                            )}
                           </div>
                           <div style={{fontSize:'15px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'4px'}}>{event.title}</div>
-                          <div style={{fontSize:'13px', color:'var(--text-3)'}}>📅 {event.date} {event.time && `· ${event.time}`}</div>
+                          <div style={{fontSize:'13px', color:'var(--text-3)'}}>📅 {formatDate(event.date)} {event.time && `· ${event.time}`}</div>
                           <div style={{fontSize:'13px', color:'var(--text-3)'}}>📍 {event.location}</div>
                         </div>
                       </div>
@@ -436,7 +489,7 @@ export default function MyEventsPage() {
                           {myReview && <span style={{fontSize:'11px', color:'#9A6200', background:'#FEF3C7', padding:'1px 8px', borderRadius:'100px'}}>{'⭐'.repeat(myReview.rating)}</span>}
                         </div>
                         <div style={{fontSize:'15px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'4px'}}>{event.title}</div>
-                        <div style={{fontSize:'13px', color:'var(--text-3)'}}>📅 {event.date}</div>
+                        <div style={{fontSize:'13px', color:'var(--text-3)'}}>📅 {formatDate(event.date)}</div>
                         <div style={{fontSize:'13px', color:'var(--text-3)'}}>📍 {event.location}</div>
                       </div>
                     </div>

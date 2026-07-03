@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr + 'T00:00:00')
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function EventPage({ params }: { params: { id: string } }) {
   const [event, setEvent] = useState<any>(null)
   const [creator, setCreator] = useState<any>(null)
@@ -21,6 +26,11 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const [savingReview, setSavingReview] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+  const [onWaitlist, setOnWaitlist] = useState(false)
+  const [waitlistCount, setWaitlistCount] = useState(0)
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false)
+  const [postPhoto, setPostPhoto] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -43,13 +53,14 @@ export default function EventPage({ params }: { params: { id: string } }) {
 
     if (eventData) {
       setEvent(eventData)
+      if (eventData.post_photo_url) setPostPhoto(eventData.post_photo_url)
       setEditForm(eventData)
       setCreator(eventData.profiles || null)
     }
 
     const { data: attendeesData } = await supabase
       .from('event_attendees')
-      .select('user_id, profiles(display_name, avatar_url, location, interests)')
+      .select('user_id, profiles(display_name, avatar_url, location, interests, is_traveler)')
       .eq('event_id', params.id)
     if (attendeesData) {
       setAttendees(attendeesData)
@@ -65,6 +76,15 @@ export default function EventPage({ params }: { params: { id: string } }) {
       setReviews(reviewsData)
       if (userId) setMyReview(reviewsData.find((r: any) => r.reviewer_id === userId) || null)
     }
+
+    const { data: waitlistData, count } = await supabase
+      .from('event_waitlist')
+      .select('user_id', { count: 'exact' })
+      .eq('event_id', params.id)
+    if (waitlistData) {
+      setWaitlistCount(count || 0)
+      if (userId) setOnWaitlist(waitlistData.some((w: any) => w.user_id === userId))
+    }
   }
 
   const toggleJoin = async () => {
@@ -74,9 +94,54 @@ export default function EventPage({ params }: { params: { id: string } }) {
       await supabase.from('event_attendees').delete().eq('event_id', params.id).eq('user_id', user.id)
     } else {
       await supabase.from('event_attendees').insert({ event_id: params.id, user_id: user.id })
+  
+      // Invia email al creatore
+      try {
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', user.id)
+          .single()
+  
+        const { data: creatorProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', event.creator_id)
+          .single()
+  
+        if (creatorProfile?.email && event.creator_id !== user.id) {
+          await fetch('https://bljrordabqfrlkvmenkj.supabase.co/functions/v1/send-notification-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsanJvcmRhYnFmcmxrdm1lbmtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODA0MzAsImV4cCI6MjA5NDM1NjQzMH0.WV_KZW54uMSH3yv7QJZEL_1CygjABkNOtByPrFt_Dz0`,
+            },
+            body: JSON.stringify({
+              type: 'join',
+              to: creatorProfile.email,
+              eventTitle: event.title,
+              joinerName: myProfile?.display_name || 'Someone',
+            }),
+          })
+        }
+      } catch (e) {
+        console.log('Email error:', e)
+      }
     }
     await loadEvent(user.id)
     setLoading(false)
+  }
+
+  const toggleWaitlist = async () => {
+    if (!user) { window.location.href = '/login'; return }
+    setLoadingWaitlist(true)
+    if (onWaitlist) {
+      await supabase.from('event_waitlist').delete().eq('event_id', params.id).eq('user_id', user.id)
+    } else {
+      await supabase.from('event_waitlist').insert({ event_id: params.id, user_id: user.id })
+    }
+    await loadEvent(user.id)
+    setLoadingWaitlist(false)
   }
 
   const deleteEvent = async () => {
@@ -123,6 +188,23 @@ export default function EventPage({ params }: { params: { id: string } }) {
     }
   }
 
+  const uploadPostPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user || !event) return
+    setUploadingPhoto(true)
+    const ext = file.name.split('.').pop()
+    const path = `post-photos/${event.id}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('event-covers').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('event-covers').getPublicUrl(path)
+      await supabase.from('events').update({ post_photo_url: urlData.publicUrl }).eq('id', event.id)
+      setPostPhoto(urlData.publicUrl)
+    } else {
+      alert('Error uploading photo: ' + error.message)
+    }
+    setUploadingPhoto(false)
+  }
+
   const categoryColor: Record<string, string> = {
     Sport: '#185FA5', Food: '#D85A30', Culture: '#BA7517',
     Outdoor: '#1D9E75', Music: '#534AB7'
@@ -138,6 +220,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
   const color = categoryColor[event.category] || '#1D9E75'
   const isCreator = user?.id === event.creator_id
   const isPast = event.date < new Date().toISOString().split('T')[0]
+  const isFull = spots <= 0
   const avgRating = reviews.length > 0
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : null
@@ -165,14 +248,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </a>
       )}
 
-      {/* COVER IMAGE */}
       {event.cover_url && (
         <div style={{borderRadius:'var(--radius)', overflow:'hidden', marginBottom:'16px', boxShadow:'var(--shadow)'}}>
-          <img
-            src={event.cover_url}
-            style={{width:'100%', height:'220px', objectFit:'cover', display:'block'}}
-            alt={event.title}
-          />
+          <img src={event.cover_url} style={{width:'100%', height:'220px', objectFit:'cover', display:'block'}} alt={event.title} />
         </div>
       )}
 
@@ -189,8 +267,19 @@ export default function EventPage({ params }: { params: { id: string } }) {
               {event.gender_filter === 'women' ? '👩 Women only' : '👨 Men only'}
             </span>
           )}
+          {event.mood && (
+            <span style={{fontSize:'11px', fontWeight:'600', color:'#C04A20', background:'#FAECE7', padding:'3px 10px', borderRadius:'100px'}}>
+              {event.mood === 'energetic' ? '🔥 Energetic' : event.mood === 'chill' ? '🧘 Chill' : event.mood === 'party' ? '🎉 Party' : '💬 Social'}
+            </span>
+          )}
+          {event.recurrence && (
+            <span style={{fontSize:'11px', fontWeight:'600', color:'#185FA5', background:'#E6F1FB', padding:'3px 10px', borderRadius:'100px'}}>
+              {event.recurrence === 'weekly' ? '📅 Weekly' : '🗓️ Monthly'}
+            </span>
+          )}
           {isPast && <span style={{fontSize:'11px', fontWeight:'600', color:'var(--text-3)', background:'var(--bg)', padding:'3px 10px', borderRadius:'100px'}}>Past event</span>}
           {avgRating && <span style={{fontSize:'11px', fontWeight:'600', color:'#9A6200', background:'#FEF3C7', padding:'3px 10px', borderRadius:'100px'}}>⭐ {avgRating}</span>}
+          {isFull && !isPast && <span style={{fontSize:'11px', fontWeight:'600', color:'#DC2626', background:'#FEE2E2', padding:'3px 10px', borderRadius:'100px'}}>🔴 Full</span>}
         </div>
 
         {editing ? (
@@ -238,7 +327,6 @@ export default function EventPage({ params }: { params: { id: string } }) {
               )}
             </div>
 
-            {/* HOSTED BY */}
             {creator?.display_name && (
               <div
                 onMouseDown={() => window.location.href = `/users/${event.creator_id}`}
@@ -262,7 +350,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
             <div style={{display:'flex', flexDirection:'column', gap:'8px', marginBottom:'20px'}}>
               <div style={{display:'flex', alignItems:'center', gap:'10px', fontSize:'14px', color:'var(--text-2)'}}>
                 <span style={{fontSize:'18px'}}>📅</span>
-                <span>{event.date} {event.time && `· ${event.time}`}</span>
+                <span>{formatDate(event.date)} {event.time && `· ${event.time}`}</span>
               </div>
               <div style={{display:'flex', alignItems:'center', gap:'10px', fontSize:'14px', color:'var(--text-2)'}}>
                 <span style={{fontSize:'18px'}}>📍</span>
@@ -270,21 +358,17 @@ export default function EventPage({ params }: { params: { id: string } }) {
               </div>
               <div style={{display:'flex', alignItems:'center', gap:'10px', fontSize:'14px', color:'var(--text-2)'}}>
                 <span style={{fontSize:'18px'}}>👥</span>
-                <span>{attendees.length} joined · <span style={{color: spots <= 2 ? '#C04A20' : 'var(--green)', fontWeight:'600'}}>{spots} spots left</span></span>
+                <span>
+                  {attendees.length} joined · <span style={{color: spots <= 2 ? '#C04A20' : 'var(--green)', fontWeight:'600'}}>{spots > 0 ? `${spots} spots left` : 'Full'}</span>
+                  {waitlistCount > 0 && <span style={{color:'var(--text-3)'}}> · {waitlistCount} on waitlist</span>}
+                </span>
               </div>
             </div>
 
             <div style={{marginBottom:'20px', borderRadius:'12px', overflow:'hidden', border:'1px solid var(--border)'}}>
-              <iframe
-                width="100%"
-                height="200"
-                style={{border:0, display:'block'}}
-                loading="lazy"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(event.location)}&output=embed`}
-              />
+              <iframe width="100%" height="200" style={{border:0, display:'block'}} loading="lazy" src={`https://maps.google.com/maps?q=${encodeURIComponent(event.location)}&output=embed`} />
             </div>
 
-            {/* BOTTONE JOIN / SIGNUP */}
             {!user ? (
               <a 
                 href="/login"
@@ -292,14 +376,30 @@ export default function EventPage({ params }: { params: { id: string } }) {
               >
                 Sign up to join this event →
               </a>
-            ) : !isPast ? (
-              <button
-                onMouseDown={toggleJoin}
-                disabled={loading || (!joined && spots === 0) || isCreator}
-                style={{width:'100%', padding:'14px', background: isCreator ? 'var(--bg)' : joined ? 'var(--green-light)' : 'var(--green)', color: isCreator ? 'var(--text-3)' : joined ? 'var(--green-dark)' : 'white', border: isCreator ? '1px solid var(--border)' : 'none', borderRadius:'100px', fontSize:'16px', fontWeight:'700', cursor: isCreator ? 'default' : 'pointer', marginBottom:'10px', boxShadow: isCreator || joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)'}}
-              >
-                {isCreator ? '👑 You created this event' : loading ? '...' : joined ? '✓ You are going!' : spots === 0 ? 'Event is full' : 'Join this event →'}
-              </button>
+            ) : !isPast && !isCreator ? (
+              <>
+                {!isFull ? (
+                  <button
+                    onMouseDown={toggleJoin}
+                    disabled={loading}
+                    style={{width:'100%', padding:'14px', background: joined ? 'var(--green-light)' : 'var(--green)', color: joined ? 'var(--green-dark)' : 'white', border:'none', borderRadius:'100px', fontSize:'16px', fontWeight:'700', cursor:'pointer', marginBottom:'10px', boxShadow: joined ? 'none' : '0 2px 8px rgba(29,158,117,0.3)'}}
+                  >
+                    {loading ? '...' : joined ? '✓ You are going!' : 'Join this event →'}
+                  </button>
+                ) : !joined ? (
+                  <button
+                    onMouseDown={toggleWaitlist}
+                    disabled={loadingWaitlist}
+                    style={{width:'100%', padding:'14px', background: onWaitlist ? '#FEF3C7' : '#FEE2E2', color: onWaitlist ? '#9A6200' : '#DC2626', border:'none', borderRadius:'100px', fontSize:'16px', fontWeight:'700', cursor:'pointer', marginBottom:'10px'}}
+                  >
+                    {loadingWaitlist ? '...' : onWaitlist ? '✓ On waitlist — you will be notified' : '🎟️ Join waitlist'}
+                  </button>
+                ) : null}
+              </>
+            ) : !isPast && isCreator ? (
+              <div style={{width:'100%', padding:'14px', background:'var(--bg)', color:'var(--text-3)', border:'1px solid var(--border)', borderRadius:'100px', fontSize:'16px', fontWeight:'700', textAlign:'center', marginBottom:'10px'}}>
+                👑 You created this event
+              </div>
             ) : null}
 
             {isPast && joined && !isCreator && (
@@ -323,24 +423,13 @@ export default function EventPage({ params }: { params: { id: string } }) {
                   ))}
                 </div>
                 <p style={{fontSize:'13px', fontWeight:'600', marginBottom:'6px'}}>Comment (optional)</p>
-                <textarea
-                  value={reviewComment}
-                  onChange={e => setReviewComment(e.target.value)}
-                  placeholder="Tell others about your experience..."
-                  rows={3}
-                  style={{resize:'none', marginBottom:'12px'}}
-                />
-                <button
-                  onMouseDown={saveReview}
-                  disabled={savingReview}
-                  style={{width:'100%', padding:'12px', background:'var(--green)', color:'white', border:'none', borderRadius:'var(--radius-sm)', fontSize:'14px', fontWeight:'700', cursor:'pointer'}}
-                >
+                <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} placeholder="Tell others about your experience..." rows={3} style={{resize:'none', marginBottom:'12px'}} />
+                <button onMouseDown={saveReview} disabled={savingReview} style={{width:'100%', padding:'12px', background:'var(--green)', color:'white', border:'none', borderRadius:'var(--radius-sm)', fontSize:'14px', fontWeight:'700', cursor:'pointer'}}>
                   {savingReview ? 'Saving...' : 'Submit review →'}
                 </button>
               </div>
             )}
 
-            {/* BOTTONI CHAT E SHARE */}
             <div style={{display:'flex', gap:'10px'}}>
               {user && (
                 <a 
@@ -350,10 +439,7 @@ export default function EventPage({ params }: { params: { id: string } }) {
                   💬 Chat
                 </a>
               )}
-              <button
-                onMouseDown={shareEvent}
-                style={{flex:1, padding:'14px', background:'var(--bg)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer'}}
-              >
+              <button onMouseDown={shareEvent} style={{flex:1, padding:'14px', background:'var(--bg)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:'100px', fontSize:'15px', fontWeight:'700', cursor:'pointer'}}>
                 {shareCopied ? '✓ Copied!' : '🔗 Share'}
               </button>
             </div>
@@ -385,12 +471,8 @@ export default function EventPage({ params }: { params: { id: string } }) {
               })}
             </div>
             <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.7)', borderRadius:'var(--radius-sm)'}}>
-              <p style={{fontSize:'14px', fontWeight:'600', color:'var(--text)', marginBottom:'12px', textAlign:'center'}}>
-                Sign up to see who is going
-              </p>
-              <a href="/login" style={{padding:'10px 24px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}>
-                Join for free →
-              </a>
+              <p style={{fontSize:'14px', fontWeight:'600', color:'var(--text)', marginBottom:'12px', textAlign:'center'}}>Sign up to see who is going</p>
+              <a href="/login" style={{padding:'10px 24px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'14px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}>Join for free →</a>
             </div>
           </div>
         ) : (
@@ -418,6 +500,9 @@ export default function EventPage({ params }: { params: { id: string } }) {
                       {a.isHost && (
                         <span style={{fontSize:'10px', fontWeight:'700', color:'var(--green-dark)', background:'var(--green-mid)', padding:'2px 7px', borderRadius:'100px'}}>HOST</span>
                       )}
+                      {profile?.is_traveler && (
+                        <span style={{fontSize:'10px', fontWeight:'700', color:'#C04A20', background:'#FAECE7', padding:'2px 7px', borderRadius:'100px'}}>🧳 Traveler</span>
+                      )}
                     </div>
                     {profile?.location && <div style={{fontSize:'12px', color:'var(--text-3)'}}>📍 {profile.location}</div>}
                     {profile?.interests?.length > 0 && (
@@ -437,6 +522,35 @@ export default function EventPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
+
+      {/* POST-EVENT PHOTO */}
+      {isPast && (postPhoto || isCreator) && (
+        <div style={{background:'white', borderRadius:'var(--radius)', padding:'24px', boxShadow:'var(--shadow)', border:'1px solid var(--border)', marginBottom:'16px'}}>
+          <h2 style={{fontSize:'18px', fontWeight:'700', fontFamily:'Syne, sans-serif', marginBottom:'16px'}}>
+            📸 Group photo
+          </h2>
+          {postPhoto ? (
+            <div>
+              <img src={postPhoto} style={{width:'100%', objectFit:'cover', display:'block', borderRadius:'var(--radius-sm)'}} alt="Group photo" />
+              {isCreator && (
+                <label style={{display:'block', marginTop:'12px', padding:'10px', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', textAlign:'center', fontSize:'13px', fontWeight:'600', cursor:'pointer', color:'var(--text-2)'}}>
+                  {uploadingPhoto ? 'Uploading...' : '🔄 Change photo'}
+                  <input type="file" accept="image/*" onChange={uploadPostPhoto} style={{display:'none'}} />
+                </label>
+              )}
+            </div>
+          ) : isCreator ? (
+            <label style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', width:'100%', height:'160px', border:'2px dashed var(--border)', borderRadius:'var(--radius-sm)', cursor:'pointer', background:'var(--bg)', gap:'8px', boxSizing:'border-box'}}>
+              <span style={{fontSize:'32px'}}>📸</span>
+              <span style={{fontSize:'13px', fontWeight:'600', color:'var(--text-3)'}}>
+                {uploadingPhoto ? 'Uploading...' : 'Add a group photo'}
+              </span>
+              <span style={{fontSize:'11px', color:'var(--text-3)'}}>Share the memory with attendees</span>
+              <input type="file" accept="image/*" onChange={uploadPostPhoto} style={{display:'none'}} />
+            </label>
+          ) : null}
+        </div>
+      )}
 
       {/* REVIEWS */}
       {reviews.length > 0 && (
@@ -469,20 +583,14 @@ export default function EventPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* BANNER SIGNUP per utenti non loggati */}
       {!user && (
         <div style={{background:'#0D1F1A', borderRadius:'var(--radius)', padding:'28px 24px', textAlign:'center', marginTop:'16px'}}>
           <div style={{fontSize:'32px', marginBottom:'12px'}}>🌍</div>
-          <h2 style={{fontSize:'20px', fontWeight:'800', fontFamily:'Syne, sans-serif', color:'white', marginBottom:'8px'}}>
-            Meet people, not screens
-          </h2>
+          <h2 style={{fontSize:'20px', fontWeight:'800', fontFamily:'Syne, sans-serif', color:'white', marginBottom:'8px'}}>Meet people, not screens</h2>
           <p style={{fontSize:'14px', color:'rgba(255,255,255,0.6)', marginBottom:'20px', lineHeight:'1.6'}}>
             Join Friends Without Benefits for free and start attending real-life experiences.
           </p>
-          <a 
-            href="/login"
-            style={{display:'inline-block', padding:'14px 28px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'15px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}
-          >
+          <a href="/login" style={{display:'inline-block', padding:'14px 28px', background:'var(--green)', color:'white', borderRadius:'100px', textDecoration:'none', fontSize:'15px', fontWeight:'700', boxShadow:'0 2px 8px rgba(29,158,117,0.3)'}}>
             Join for free →
           </a>
         </div>

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         .single()
 
       if (!profile?.display_name) {
-        return NextResponse.redirect(new URL('/profile?new=true', requestUrl.origin))
+        return NextResponse.redirect(new URL('/onboarding', requestUrl.origin))
       }
     }
   }

@@ -42,6 +42,22 @@ export default function NotificationsPage() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'join': return '👋'
+      case 'group_join': return '👥'
+      default: return '🔔'
+    }
+  }
+
+  const handleNotificationTap = (n: any) => {
+    if (n.type === 'group_join' && n.group_id) {
+      window.location.href = `/groups/${n.group_id}`
+    } else if (n.event_id) {
+      window.location.href = `/events/${n.event_id}`
+    }
+  }
+
   return (
     <main style={{
       padding:'24px 20px',
@@ -71,7 +87,7 @@ export default function NotificationsPage() {
             No notifications yet
           </h2>
           <p style={{fontSize:'14px', lineHeight:'1.6'}}>
-            When someone joins your event you will be notified here.
+            When someone joins your event or group you will be notified here.
           </p>
         </div>
       ) : (
@@ -79,20 +95,20 @@ export default function NotificationsPage() {
           {notifications.map(n => (
             <div
               key={n.id}
-              onMouseDown={() => n.event_id && (window.location.href = `/events/${n.event_id}`)}
+              onMouseDown={() => handleNotificationTap(n)}
               style={{
                 background: n.read ? 'white' : 'var(--green-light)',
                 border: n.read ? '1px solid var(--border)' : '1.5px solid var(--green)',
                 borderRadius:'var(--radius-sm)',
                 padding:'14px 16px',
-                cursor: n.event_id ? 'pointer' : 'default',
+                cursor: (n.event_id || n.group_id) ? 'pointer' : 'default',
                 display:'flex',
                 alignItems:'flex-start',
                 gap:'12px',
               }}
             >
               <span style={{fontSize:'22px', flexShrink:0}}>
-                {n.type === 'join' ? '👋' : '🔔'}
+                {getIcon(n.type)}
               </span>
               <div style={{flex:1, minWidth:0}}>
                 <p style={{fontSize:'14px', color:'var(--text)', lineHeight:'1.5', marginBottom:'4px'}}>

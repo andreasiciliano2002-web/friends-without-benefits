@@ -175,3 +175,18 @@ html {
     background: #242924;
     border-color: var(--green);
   }
+  /* Fix card bianche in dark mode */
+[data-theme="dark"] div[style*="background:'white'"],
+[data-theme="dark"] div[style*='background: white'],
+[data-theme="dark"] div[style*='background:white'] {
+  background: #1A1F1C !important;
+}
+
+[data-theme="dark"] nav {
+  background: rgba(15, 20, 16, 0.97) !important;
+}
+
+[data-theme="dark"] .pac-container {
+  background: #1A1F1C;
+  border-color: rgba(255,255,255,0.1);
+}
